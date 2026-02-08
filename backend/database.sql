@@ -1,9 +1,66 @@
-CREATE TABLE shops (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    store_name VARCHAR(255),
-    phone VARCHAR(20) UNIQUE,
-    password_hash VARCHAR(255),
-    country VARCHAR(100),
-    state VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- MySQL dump 10.13  Distrib 8.0.45, for Win64 (x86_64)
+--
+-- Host: localhost    Database: reco
+-- ------------------------------------------------------
+-- Server version	9.6.0
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;
+SET @@SESSION.SQL_LOG_BIN= 0;
+
+--
+-- GTID state at the beginning of the backup 
+--
+
+SET @@GLOBAL.GTID_PURGED=/*!80000 '+'*/ '2548e6af-0518-11f1-9f87-04d4c4dd0839:1-7';
+
+--
+-- Table structure for table `shops`
+--
+
+DROP TABLE IF EXISTS `shops`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `shops` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `store_name` varchar(255) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `password_hash` varchar(255) DEFAULT NULL,
+  `country` varchar(100) DEFAULT NULL,
+  `state` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `phone` (`phone`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `shops`
+--
+
+LOCK TABLES `shops` WRITE;
+/*!40000 ALTER TABLE `shops` DISABLE KEYS */;
+INSERT INTO `shops` VALUES (1,'Test Store','9999999999','$2b$12$T36YDUZ6Tdnu9GlcJU/KeOOgtB218HTCEO0OC7rmbQ1TMDR/0ROzK','India','Kerala','2026-02-08 18:16:40'),(2,'Test store','84646464846','$2b$12$T8uJttQeWJkasHvNGx3VOerJPr68ThRo5MDmwQm6bS5xOCou9hV4C','India','Kerala','2026-02-08 18:24:04'),(3,'SR Bakery','9846586002','$2b$12$IeqmqBMDt0da3XUUuZ7QZe9GFn0fc242moZHtPj40Nvdt8Wcr3EU.','India','Kerala','2026-02-08 18:41:29');
+/*!40000 ALTER TABLE `shops` ENABLE KEYS */;
+UNLOCK TABLES;
+SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-02-09  2:00:39
