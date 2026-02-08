@@ -15,7 +15,7 @@ import { Picker } from "@react-native-picker/picker";
 import AppText from "../components/AppText";
 
 
-export default function SignUpScreen() {
+export default function SignUpScreen({ navigation }) {
 
   const [store, setStore] = useState("");
   const [phone, setPhone] = useState("");
@@ -202,9 +202,17 @@ export default function SignUpScreen() {
           </AppText>
         </TouchableOpacity>
 
-        <AppText font="regular" style={styles.bottomText}>
-          Already have an account? <AppText font="bold" style={{color:"#000"}}>Sign in</AppText>
-        </AppText>
+        <View style={styles.loginRow}>
+          <AppText font="regular" style={{color:"#808080"}}>
+            Already have an account?
+          </AppText>
+
+          <Pressable onPress={() => navigation.navigate("Login")}>
+            <AppText font="bold" style={{color:"#000"}}>
+              {" "}Sign in
+            </AppText>
+          </Pressable>
+        </View>
 
       </View>
     </View>
@@ -312,6 +320,13 @@ modalContent: {
     color: "white",
     fontSize: 18,
   },
+loginRow: {
+  flexDirection: "row",
+  justifyContent: "center",   // centers horizontally
+  alignItems: "center",
+  marginTop: 30,
+  width: "100%",
+},
 
   bottomText: {
     textAlign: "center",

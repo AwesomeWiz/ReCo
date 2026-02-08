@@ -2,9 +2,15 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import bcrypt
 from db import get_connection
+import jwt
+import datetime
+
 
 app = Flask(__name__)
 CORS(app)
+
+SECRET_KEY = "reco_secret_key"
+
 
 @app.route("/signup", methods=["POST"])
 def signup():
@@ -49,9 +55,19 @@ def login():
         return jsonify({"message":"User not found"}), 404
 
     if bcrypt.checkpw(password.encode(), user["password_hash"].encode("utf-8")):
-        return jsonify({"message":"Login success"})
-    else:
-        return jsonify({"message":"Wrong password"}), 401
+
+        token = jwt.encode({
+            "user_id": user["id"],
+            "exp": datetime.datetime.utcnow() + datetime.timedelta(days=30)
+        }, SECRET_KEY, algorithm="HS256")
+
+        return jsonify({
+            "message":"Login success",
+            "token": token
+        })
+
+    return jsonify({"message":"Wrong password"}), 401
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
