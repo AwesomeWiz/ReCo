@@ -7,6 +7,9 @@ import SignUpScreen from "../screens/SignUpScreen";
 import LoginScreen from "../screens/LoginScreen";
 import DashboardScreen from "../screens/DashboardScreen";
 
+import BottomTabs from "./BottomTabs";
+
+
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
@@ -16,7 +19,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Dashboard" component={DashboardScreen} />
+        <Stack.Screen name="Dashboard" component={BottomTabs} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -4,6 +4,8 @@ import bcrypt
 from db import get_connection
 import jwt
 import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
 
 app = Flask(__name__)
