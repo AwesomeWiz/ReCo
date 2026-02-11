@@ -8,9 +8,9 @@ import ProfileScreen from "../screens/ProfileScreen";
 
 const Tab = createBottomTabNavigator();
 
-export default function BottomTabs(){
-  return(
-    <Tab.Navigator screenOptions={{ headerShown:false }}>
+export default function BottomTabs() {
+  return (
+    <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Scan" component={ScanScreen} />
       <Tab.Screen name="Analytics" component={AnalyticsScreen} />

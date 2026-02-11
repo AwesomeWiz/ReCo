@@ -32,7 +32,7 @@ const handleLogin = async () => {
     const saved = await AsyncStorage.getItem("token");
     console.log("Saved token:", saved);
 
-    navigation.replace("Dashboard");
+    navigation.replace("Main");
 
   } catch (err) {
     Alert.alert("Error", "Invalid credentials");

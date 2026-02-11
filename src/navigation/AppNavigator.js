@@ -6,7 +6,7 @@ import SplashScreen from "../screens/SplashScreen";
 import SignUpScreen from "../screens/SignUpScreen";
 import LoginScreen from "../screens/LoginScreen";
 import DashboardScreen from "../screens/DashboardScreen";
-
+import ConfirmProductScreen from "../screens/ConfirmProductScreen";
 import BottomTabs from "./BottomTabs";
 
 
@@ -19,7 +19,11 @@ export default function AppNavigator() {
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Dashboard" component={BottomTabs} />
+        <Stack.Screen name="Main" component={BottomTabs} />
+        <Stack.Screen
+          name="ConfirmProduct"
+          component={ConfirmProductScreen}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
