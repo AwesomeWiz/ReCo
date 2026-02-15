@@ -7,6 +7,8 @@ import SignUpScreen from "../screens/SignUpScreen";
 import LoginScreen from "../screens/LoginScreen";
 import DashboardScreen from "../screens/DashboardScreen";
 import ConfirmProductScreen from "../screens/ConfirmProductScreen";
+import SalesHistoryScreen from '../screens/SalesHistory';
+import TransactionDetailsScreen from "../screens/TransactionDetailsScreen";
 import BottomTabs from "./BottomTabs";
 
 
@@ -23,6 +25,12 @@ export default function AppNavigator() {
         <Stack.Screen
           name="ConfirmProduct"
           component={ConfirmProductScreen}
+        />
+        <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} />
+        <Stack.Screen
+          name="TransactionDetails"
+          component={TransactionDetailsScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

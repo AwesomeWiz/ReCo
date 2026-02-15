@@ -3,5 +3,6 @@ export const fonts = {
   regular: "Poppins-Regular",
   semibold: "Poppins-SemiBold",
   bold: "Poppins-Bold",
-  bill: "VictorMono",
+  billbold: "VictorMono-Bold",
+  billsemi: "VictorMono-Semibold"
 };

@@ -28,7 +28,7 @@ export default function SignUpScreen({ navigation }) {
   const handleSignup = async () => {
   try {
 
-    const res = await axios.post("http://10.0.8.163:5000/signup", {
+    const res = await axios.post("http://192.168.10.10:5000/signup", {
       store: store,
       phone: phone,
       password: password,
