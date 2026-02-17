@@ -81,6 +81,13 @@ def add_item_to_transaction(user_id):
             transaction_id
         ))
 
+        cur.execute("""
+            UPDATE products
+            SET stock = stock - %s
+            WHERE name = %s AND shop_id = %s
+        """, (quantity, product_name, user_id))
+
+
         # Update transaction total
         cur.execute("""
             UPDATE transactions
@@ -255,3 +262,30 @@ def get_today_sales(user_id):
     finally:
         cur.close()
         conn.close()
+
+# ─────────────────────────────────────────────
+# ANALYTICS
+# ─────────────────────────────────────────────
+@sales_bp.route("/analytics/daily", methods=["GET"])
+@token_required
+def get_daily_sales(user_id):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT DATE(created_at) as date,
+                   SUM(total) as total_sales
+            FROM transactions
+            WHERE shop_id = %s
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+        """, (user_id,))
+
+        rows = cur.fetchall()
+        return jsonify(rows)
+
+    finally:
+        cur.close()
+        conn.close()
+

@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import SplashScreen from "../screens/SplashScreen";
 import SignUpScreen from "../screens/SignUpScreen";
 import LoginScreen from "../screens/LoginScreen";
-import DashboardScreen from "../screens/DashboardScreen";
+import ScanScreen from "../screens/ScanScreen";
 import ConfirmProductScreen from "../screens/ConfirmProductScreen";
 import SalesHistoryScreen from '../screens/SalesHistory';
 import TransactionDetailsScreen from "../screens/TransactionDetailsScreen";
@@ -21,18 +21,17 @@ export default function AppNavigator() {
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
+
+        {/* Bottom Tabs */}
         <Stack.Screen name="Main" component={BottomTabs} />
-        <Stack.Screen
-          name="ConfirmProduct"
-          component={ConfirmProductScreen}
-        />
+
+        {/* Full Screen Flow Screens (NO bottom tabs) */}
+        <Stack.Screen name="Scan" component={ScanScreen} />
+        <Stack.Screen name="ConfirmProduct" component={ConfirmProductScreen} />
         <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} />
-        <Stack.Screen
-          name="TransactionDetails"
-          component={TransactionDetailsScreen}
-          options={{ headerShown: false }}
-        />
+        <Stack.Screen name="TransactionDetails" component={TransactionDetailsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
+

@@ -33,7 +33,14 @@ const prediction = {
       <CameraView style={styles.camera} />
 
       {/* Close button */}
-      <TouchableOpacity style={styles.closeBtn}>
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={() =>
+          navigation.navigate("Main", {
+            screen: "Dashboard",
+          })
+        }
+      >
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
@@ -187,8 +194,8 @@ const styles = StyleSheet.create({
   },
 
   scanIcon: {
-    width: 70,
-    height: 70,
+    width: 60,
+    height: 60,
     tintColor: "#fff"
   },
 

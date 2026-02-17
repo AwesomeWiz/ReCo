@@ -78,9 +78,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
   };
 
   const handleContinueScan = () => {
-  navigation.navigate("Main", {
-    screen: "Scan"
-  });
+  navigation.navigate("Scan");
 };
 
 
