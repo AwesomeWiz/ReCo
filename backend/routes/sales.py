@@ -155,8 +155,14 @@ def forecast_sales(user_id):
             return jsonify({"error": "Not enough data for forecasting"}), 400
 
         df = pd.DataFrame(rows)
+
+        # Convert types properly
         df["date"] = pd.to_datetime(df["date"])
+        df["total_sales"] = pd.to_numeric(df["total_sales"], errors="coerce")
+
         df.set_index("date", inplace=True)
+        df = df.sort_index()
+
 
         model = ARIMA(df["total_sales"], order=(1,1,1))
         model_fit = model.fit()
