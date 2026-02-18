@@ -13,13 +13,12 @@ import AppText from "../components/AppText";
 import api from "../api/api";
 import labelData from "../data/labelMapping.json";
 
-
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
 const ACCENT = "#3A6FF7";
 const DANGER = "#E53935";
 
-export default function InventoryScreen() {
+export default function InventoryScreen({ navigation }) {
   const [inventory, setInventory] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
 
@@ -27,20 +26,19 @@ export default function InventoryScreen() {
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [barcode, setBarcode] = useState("");
 
   const productList = Object.values(labelData.product_names);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredProducts, setFilteredProducts] = useState([]);
 
   const CATEGORIES = [
-  "Beverages",
-  "Snacks",
-  "Bakery",
-  "Personal Care",
-  "Groceries"
-];
-
-
+    "Beverages",
+    "Snacks",
+    "Bakery",
+    "Personal Care",
+    "Groceries",
+  ];
 
   const fetchInventory = async () => {
     try {
@@ -57,57 +55,51 @@ export default function InventoryScreen() {
     }, [])
   );
 
-const handleAddProduct = async () => {
+  const handleAddProduct = async () => {
     if (!category) {
-  Alert.alert("Please select a category");
-  return;
-}
+      Alert.alert("Please select a category");
+      return;
+    }
 
-  try {
-    console.log("Sending product:", {
-      name: productName || searchQuery,
-      category,
-      price,
-      stock,
-    });
+    try {
+      const res = await api.post("/inventory/add", {
+        name: productName || searchQuery,
+        category,
+        barcode: barcode || null,
+        price: Number(price),
+        stock: Number(stock),
+      });
 
-    const res = await api.post("/inventory/add", {
-      name: productName || searchQuery,
-      category,
-      price: Number(price),
-      stock: Number(stock),
-    });
+      fetchInventory();
 
-    console.log("Response:", res.data);
+      setProductName("");
+      setSearchQuery("");
+      setCategory("");
+      setPrice("");
+      setStock("");
+      setBarcode("");
+      setShowAdd(false);
 
-    fetchInventory();
-    setProductName("");
-    setSearchQuery("");
-    setCategory("");
-    setPrice("");
-    setStock("");
-
-  } catch (err) {
-    console.log("ERROR:", err.response?.data || err.message);
-    alert("Failed to save product");
-  }
-};
+    } catch (err) {
+      console.log("ERROR:", err.response?.data || err.message);
+      Alert.alert("Failed to save product");
+    }
+  };
 
   const handleSearch = (text) => {
-  setSearchQuery(text);
+    setSearchQuery(text);
 
-  if (text.length === 0) {
-    setFilteredProducts([]);
-    return;
-  }
+    if (text.length === 0) {
+      setFilteredProducts([]);
+      return;
+    }
 
-  const results = productList.filter((item) =>
-    item.toLowerCase().includes(text.toLowerCase())
-  );
+    const results = productList.filter((item) =>
+      item.toLowerCase().includes(text.toLowerCase())
+    );
 
-  setFilteredProducts(results.slice(0, 5)); // show top 5
-};
-
+    setFilteredProducts(results.slice(0, 5));
+  };
 
   return (
     <SafeAreaView style={s.safe}>
@@ -130,56 +122,78 @@ const handleAddProduct = async () => {
         {showAdd && (
           <View style={s.formCard}>
             <TextInput
-            placeholder="Search or Enter Product Name"
-            style={s.input}
-            value={searchQuery}
-            onChangeText={handleSearch}
+              placeholder="Search or Enter Product Name"
+              style={s.input}
+              value={searchQuery}
+              onChangeText={handleSearch}
             />
 
             {filteredProducts.length > 0 && (
-            <View style={s.dropdown}>
+              <View style={s.dropdown}>
                 {filteredProducts.map((item, index) => (
-                <TouchableOpacity
+                  <TouchableOpacity
                     key={index}
                     style={s.dropdownItem}
                     onPress={() => {
-                    setProductName(item);
-                    setSearchQuery(item);
-                    setFilteredProducts([]);
+                      setProductName(item);
+                      setSearchQuery(item);
+                      setFilteredProducts([]);
                     }}
-                >
+                  >
                     <AppText>{item}</AppText>
-                </TouchableOpacity>
+                  </TouchableOpacity>
                 ))}
-            </View>
+              </View>
             )}
 
-            <View style={s.categoryWrapper}>
-            <AppText style={{ marginBottom: 8, fontWeight: "600" }}>
-                Select Category
-            </AppText>
+            {/* SCAN BARCODE BUTTON */}
+            <TouchableOpacity
+              style={s.scanBarcodeBtn}
+              onPress={() =>
+                navigation.navigate("BarcodeScanner", {
+                  mode: "inventory",
+                  onScan: (code) => setBarcode(code),
+                })
+              }
+            >
+              <AppText style={s.scanBarcodeText}>
+                Scan Barcode
+              </AppText>
+            </TouchableOpacity>
 
-            <View style={s.categoryRow}>
+            {barcode ? (
+              <AppText style={s.barcodeText}>
+                Barcode: {barcode}
+              </AppText>
+            ) : null}
+
+            {/* CATEGORY */}
+            <View style={s.categoryWrapper}>
+              <AppText style={{ marginBottom: 8, fontWeight: "600" }}>
+                Select Category
+              </AppText>
+
+              <View style={s.categoryRow}>
                 {CATEGORIES.map((item) => (
-                <TouchableOpacity
+                  <TouchableOpacity
                     key={item}
                     style={[
-                    s.categoryBtn,
-                    category === item && s.categorySelected
+                      s.categoryBtn,
+                      category === item && s.categorySelected,
                     ]}
                     onPress={() => setCategory(item)}
-                >
+                  >
                     <AppText
-                    style={[
+                      style={[
                         s.categoryText,
-                        category === item && { color: "#fff" }
-                    ]}
+                        category === item && { color: "#fff" },
+                      ]}
                     >
-                    {item}
+                      {item}
                     </AppText>
-                </TouchableOpacity>
+                  </TouchableOpacity>
                 ))}
-            </View>
+              </View>
             </View>
 
             <TextInput
@@ -189,6 +203,7 @@ const handleAddProduct = async () => {
               value={price}
               onChangeText={setPrice}
             />
+
             <TextInput
               placeholder="Stock"
               keyboardType="numeric"
@@ -198,7 +213,9 @@ const handleAddProduct = async () => {
             />
 
             <TouchableOpacity style={s.saveBtn} onPress={handleAddProduct}>
-              <AppText font="satoshi" style={s.saveText}>Save Product</AppText>
+              <AppText font="satoshi" style={s.saveText}>
+                Save Product
+              </AppText>
             </TouchableOpacity>
           </View>
         )}
@@ -210,33 +227,36 @@ const handleAddProduct = async () => {
           </AppText>
         ) : (
           inventory.map((item) => (
-           <View key={item.id} style={s.card}>
-            <View style={s.leftSection}>
+            <View key={item.id} style={s.card}>
+              <View style={s.leftSection}>
                 <AppText font="semibold" style={s.productName}>
-                {item.product_name}
+                  {item.product_name}
                 </AppText>
 
-                <AppText style={s.category}>{item.category}</AppText>
+                <AppText style={s.category}>
+                  {item.category}
+                </AppText>
 
-                {/* Price BELOW name (left aligned) */}
                 <AppText style={s.price}>
-                ₹{Number(item.price).toFixed(2)}
+                  ₹{Number(item.price).toFixed(2)}
                 </AppText>
-            </View>
+              </View>
 
-            <View style={s.rightSection}>
+              <View style={s.rightSection}>
                 <AppText
-                style={[
+                  style={[
                     s.stock,
                     item.stock <= 5 && item.stock > 0 && { color: DANGER },
-                    item.stock === 0 && { color: DANGER, fontWeight: "bold" },
-                ]}
+                    item.stock === 0 && {
+                      color: DANGER,
+                      fontWeight: "bold",
+                    },
+                  ]}
                 >
-                Stock: {item.stock}
+                  Stock: {item.stock}
                 </AppText>
+              </View>
             </View>
-            </View>
-
           ))
         )}
       </ScrollView>
@@ -256,7 +276,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  addText: { color: "#fff", fontWeight: "600", fontSize: 16, },
+  addText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 
   formCard: {
     backgroundColor: WHITE,
@@ -273,83 +293,96 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
 
+  scanBarcodeBtn: {
+    backgroundColor: ACCENT,
+    padding: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  scanBarcodeText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+
+  barcodeText: {
+    marginBottom: 10,
+    fontWeight: "600",
+    color: "#333",
+  },
+
   saveBtn: {
     backgroundColor: "#000",
     padding: 12,
     borderRadius: 25,
     alignItems: "center",
   },
-  saveText: { color: "#fff", fontWeight: "600", fontSize: 16, },
+  saveText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 
-card: {
-  backgroundColor: WHITE,
-  padding: 16,
-  borderRadius: 18,
-  flexDirection: "row",
-  justifyContent: "space-between",
-  marginBottom: 12,
-},
+  card: {
+    backgroundColor: WHITE,
+    padding: 16,
+    borderRadius: 18,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
 
-leftSection: {
-  width: "80%", // Controls wrapping
-},
+  leftSection: { width: "80%" },
 
-rightSection: {
-  justifyContent: "center",
-  alignItems: "flex-end",
-},
+  rightSection: {
+    justifyContent: "center",
+    alignItems: "flex-end",
+  },
+
   dropdown: {
-  backgroundColor: "#fff",
-  borderWidth: 1,
-  borderColor: "#ddd",
-  borderRadius: 12,
-  marginBottom: 10,
-},
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 12,
+    marginBottom: 10,
+  },
 
-dropdownItem: {
-  padding: 10,
-  borderBottomWidth: 1,
-  borderColor: "#eee",
-},
-categoryWrapper: {
-  marginBottom: 12,
-},
+  dropdownItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
 
-categoryRow: {
-  flexDirection: "row",
-  flexWrap: "wrap",
-  gap: 8,
-},
+  categoryWrapper: { marginBottom: 12 },
 
-categoryBtn: {
-  borderWidth: 1,
-  borderColor: ACCENT,
-  paddingVertical: 6,
-  paddingHorizontal: 12,
-  borderRadius: 20,
-  marginRight: 8,
-  marginBottom: 8,
-},
+  categoryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
 
-categorySelected: {
-  backgroundColor: ACCENT,
-},
+  categoryBtn: {
+    borderWidth: 1,
+    borderColor: ACCENT,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+  },
 
-categoryText: {
-  fontSize: 12,
-  color: ACCENT,
-  fontWeight: "600",
-},
+  categorySelected: { backgroundColor: ACCENT },
 
-productName: {
-  flexWrap: "wrap",
-},
-price: {
-  marginTop: 6,
-  fontWeight: "600",
-},
+  categoryText: {
+    fontSize: 12,
+    color: ACCENT,
+    fontWeight: "600",
+  },
 
-  category: { fontSize: 12, color: "#666", marginTop: 2, },
+  productName: { flexWrap: "wrap" },
+
+  price: { marginTop: 6, fontWeight: "600" },
+
+  category: { fontSize: 12, color: "#666", marginTop: 2 },
+
   stock: { fontSize: 14, fontWeight: "600" },
+
   empty: { textAlign: "center", marginTop: 40 },
 });

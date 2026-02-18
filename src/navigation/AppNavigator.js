@@ -6,11 +6,11 @@ import SplashScreen from "../screens/SplashScreen";
 import SignUpScreen from "../screens/SignUpScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ScanScreen from "../screens/ScanScreen";
+import BarcodeScannerScreen from "../screens/BarcodeScanner"; // ✅ NEW
 import ConfirmProductScreen from "../screens/ConfirmProductScreen";
-import SalesHistoryScreen from '../screens/SalesHistory';
+import SalesHistoryScreen from "../screens/SalesHistory";
 import TransactionDetailsScreen from "../screens/TransactionDetailsScreen";
 import BottomTabs from "./BottomTabs";
-
 
 const Stack = createNativeStackNavigator();
 
@@ -25,13 +25,29 @@ export default function AppNavigator() {
         {/* Bottom Tabs */}
         <Stack.Screen name="Main" component={BottomTabs} />
 
-        {/* Full Screen Flow Screens (NO bottom tabs) */}
+        {/* ML Product Detection Screen */}
         <Stack.Screen name="Scan" component={ScanScreen} />
-        <Stack.Screen name="ConfirmProduct" component={ConfirmProductScreen} />
-        <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} />
-        <Stack.Screen name="TransactionDetails" component={TransactionDetailsScreen} />
+
+        {/* ✅ Dedicated Barcode Scanner Screen */}
+        <Stack.Screen
+          name="BarcodeScanner"
+          component={BarcodeScannerScreen}
+        />
+
+        {/* Full Flow Screens */}
+        <Stack.Screen
+          name="ConfirmProduct"
+          component={ConfirmProductScreen}
+        />
+        <Stack.Screen
+          name="SalesHistory"
+          component={SalesHistoryScreen}
+        />
+        <Stack.Screen
+          name="TransactionDetails"
+          component={TransactionDetailsScreen}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
-

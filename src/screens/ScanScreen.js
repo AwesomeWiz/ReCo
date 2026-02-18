@@ -1,18 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import AppText from "../components/AppText";
 
-export default function ScanScreen({ navigation }) {
+export default function ScanScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
+  const [barcodeMode, setBarcodeMode] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
-  // 🔹 Mock ML output (replace later)
-const prediction = {
-  productName: "Coca Cola 250 ml Bottle",
-  category: "Soft Drinks",
-  confidence: 0.92
-};
-
+  // 🔹 Mock ML output (replace later with TFLite)
+  const prediction = {
+    productName: "Coca Cola 250 ml Bottle",
+    category: "Soft Drinks",
+    confidence: 0.92
+  };
 
   if (!permission) return <View />;
 
@@ -21,16 +22,52 @@ const prediction = {
       <View style={styles.center}>
         <AppText>Camera permission required</AppText>
         <TouchableOpacity onPress={requestPermission}>
-          <AppText style={{ color: "#2254C5" }}>Grant Permission</AppText>
+          <AppText style={{ color: "#2254C5" }}>
+            Grant Permission
+          </AppText>
         </TouchableOpacity>
       </View>
     );
   }
 
+  const handleBarcodeScanned = ({ data }) => {
+    if (isScanning) return;
+
+    setIsScanning(true);
+    setBarcodeMode(false);
+
+    // 🔹 If coming from Inventory Screen
+    if (route?.params?.mode === "inventory") {
+      route.params.onScan(data);
+      navigation.goBack();
+      return;
+    }
+
+    // 🔹 Default behavior (sales flow)
+    navigation.navigate("ConfirmProduct", {
+      barcode: data
+    });
+
+    setTimeout(() => setIsScanning(false), 1000);
+  };
+
   return (
     <View style={styles.container}>
+
       {/* Camera */}
-      <CameraView style={styles.camera} />
+      <CameraView
+        style={styles.camera}
+        barcodeScannerSettings={{
+          barcodeTypes: [
+            "ean13",
+            "ean8",
+            "code128",
+            "upc_a",
+            "upc_e"
+          ]
+        }}
+        onBarcodeScanned={barcodeMode ? handleBarcodeScanned : undefined}
+      />
 
       {/* Close button */}
       <TouchableOpacity
@@ -44,7 +81,7 @@ const prediction = {
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
-      {/* Scanner corners */}
+      {/* Scanner Frame */}
       <View style={styles.scannerFrame}>
         <View style={[styles.corner, styles.topLeft]} />
         <View style={[styles.corner, styles.topRight]} />
@@ -52,9 +89,21 @@ const prediction = {
         <View style={[styles.corner, styles.bottomRight]} />
       </View>
 
-      {/* Bottom sheet */}
+      {/* Barcode Toggle Button */}
+      <TouchableOpacity
+        style={styles.barcodeBtn}
+        onPress={() => setBarcodeMode(true)}
+      >
+        <AppText style={{ color: "#fff", fontWeight: "600" }}>
+          Scan Barcode
+        </AppText>
+      </TouchableOpacity>
+
+      {/* Bottom Sheet (ML UI) */}
       <View style={styles.bottomSheet}>
-        <AppText font="regular" style={styles.detected}>Detected</AppText>
+        <AppText font="regular" style={styles.detected}>
+          Detected
+        </AppText>
 
         <AppText font="semibold" style={styles.product}>
           {prediction.productName}
@@ -64,7 +113,7 @@ const prediction = {
           Category: {prediction.category}
         </AppText>
 
-        {/* Scan button */}
+        {/* Confirm ML Prediction */}
         <TouchableOpacity
           style={styles.scanBtn}
           onPress={() =>
@@ -73,24 +122,23 @@ const prediction = {
             })
           }
         >
-
           <Image
             source={require("../../assets/icons/Scan.png")}
             style={styles.scanIcon}
           />
         </TouchableOpacity>
 
-        {/* Low confidence fallback */}
         <View style={styles.fallback}>
           <AppText style={styles.wrong}>Wrong Product?</AppText>
           <AppText font="semibold" style={styles.manual}>
-            Add Product Manually
+            Use Barcode Above
           </AppText>
         </View>
       </View>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -111,6 +159,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10
+  },
+
+  barcodeBtn: {
+    position: "absolute",
+    bottom: "35%",
+    alignSelf: "center",
+    backgroundColor: "#3A6FF7",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
     zIndex: 10
   },
 
@@ -187,7 +246,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2254C5",
     width: 100,
     height: 100,
-    borderRadius: '50%',
+    borderRadius: 50, // FIXED
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20
