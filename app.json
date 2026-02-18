@@ -28,6 +28,7 @@
     },
     "plugins": [
       "expo-font",
+      "react-native-fast-tflite",
       "@react-native-community/datetimepicker"
     ]
   }
