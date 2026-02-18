@@ -8,7 +8,7 @@ export default function ScanScreen({ navigation }) {
 
   // 🔹 Mock ML output (replace later)
 const prediction = {
-  productName: "Coca Cola 250 ml Bottle",
+  productName: "Coca-Cola-600 ml-",
   category: "Soft Drinks",
   confidence: 0.92
 };

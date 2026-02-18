@@ -59,7 +59,21 @@ def add_item_to_transaction(user_id):
     cur = conn.cursor()
 
     try:
-        # Insert item into sales table
+        # 🔎 1️⃣ Check inventory stock first
+        cur.execute("""
+            SELECT stock FROM inventory
+            WHERE shop_id = %s AND product_name = %s
+        """, (user_id, product_name))
+
+        stock_row = cur.fetchone()
+
+        if not stock_row:
+            return jsonify({"error": "Product not found in inventory"}), 400
+
+        if stock_row["stock"] < quantity:
+            return jsonify({"error": "Insufficient stock"}), 400
+
+        # 🧾 2️⃣ Insert into sales
         cur.execute("""
             INSERT INTO sales (
                 shop_id,
@@ -81,14 +95,14 @@ def add_item_to_transaction(user_id):
             transaction_id
         ))
 
+        # 📦 3️⃣ Reduce stock from inventory
         cur.execute("""
-            UPDATE products
+            UPDATE inventory
             SET stock = stock - %s
-            WHERE name = %s AND shop_id = %s
-        """, (quantity, product_name, user_id))
+            WHERE shop_id = %s AND product_name = %s
+        """, (quantity, user_id, product_name))
 
-
-        # Update transaction total
+        # 💰 4️⃣ Update transaction total
         cur.execute("""
             UPDATE transactions
             SET total = total + %s
