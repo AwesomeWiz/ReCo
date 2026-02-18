@@ -8,12 +8,13 @@ export default function ScanScreen({ navigation, route }) {
   const [barcodeMode, setBarcodeMode] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
-  // 🔹 Mock ML output (replace later with TFLite)
-  const prediction = {
-    productName: "Coca Cola 250 ml Bottle",
-    category: "Soft Drinks",
-    confidence: 0.92
-  };
+  // 🔹 Mock ML output (replace later)
+const prediction = {
+  productName: "Coca-Cola-600 ml-",
+  category: "Soft Drinks",
+  confidence: 0.92
+};
+
 
   if (!permission) return <View />;
 
