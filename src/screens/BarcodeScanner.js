@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { View, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import AppText from "../components/AppText";
+import api from "../api/api";
 
 export default function BarcodeScannerScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -22,17 +23,46 @@ export default function BarcodeScannerScreen({ navigation, route }) {
     );
   }
 
-  const handleScan = ({ data }) => {
-    if (isScanning) return;
+ const handleScan = async ({ data }) => {
+  if (isScanning) return;
 
-    setIsScanning(true);
+  setIsScanning(true);
 
-    if (route?.params?.onScan) {
+  try {
+    // 🔹 INVENTORY MODE
+    if (route?.params?.mode === "inventory") {
       route.params.onScan(data);
+      navigation.goBack();
+      return;
     }
 
-    navigation.goBack();
-  };
+    // 🔹 SALES MODE
+    const res = await api.post("/inventory/barcode-lookup", {
+      barcode: data,
+    });
+
+    if (res.data.found) {
+      navigation.replace("ConfirmProduct", {
+        prediction: {
+          productName: res.data.product.name,
+          category: res.data.product.category,
+          price: res.data.product.price,
+          stock: res.data.product.stock,
+          barcode: res.data.product.barcode,
+        },
+      });
+    } else {
+      Alert.alert("No product found in inventory");
+      setIsScanning(false); // allow scanning again
+      return;
+    }
+
+  } catch (err) {
+    console.log(err.response?.data || err.message);
+    Alert.alert("No product found in inventory");
+    setIsScanning(false);
+  }
+};
 
   return (
     <View style={styles.container}>
@@ -44,8 +74,8 @@ export default function BarcodeScannerScreen({ navigation, route }) {
             "ean8",
             "code128",
             "upc_a",
-            "upc_e"
-          ]
+            "upc_e",
+          ],
         }}
         onBarcodeScanned={handleScan}
       />
@@ -61,24 +91,15 @@ export default function BarcodeScannerScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000"
-  },
-  camera: {
-    flex: 1
-  },
+  container: { flex: 1, backgroundColor: "#000" },
+  camera: { flex: 1 },
   closeBtn: {
     position: "absolute",
     top: 60,
     right: 20,
     backgroundColor: "rgba(0,0,0,0.6)",
     padding: 10,
-    borderRadius: 10
+    borderRadius: 10,
   },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  }
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
