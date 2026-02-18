@@ -30,8 +30,12 @@ export default function ConfirmProductScreen({ route, navigation }) {
   const totalItem = price * quantity;
 
   const fetchCart = async (id) => {
-    const res = await api.get(`/transactions/${id}`);
-    setCartItems(res.data.items || []);
+    try {
+      const res = await api.get(`/transactions/${id}`);
+      setCartItems(res.data.items || []);
+    } catch (err) {
+      console.log("fetchCart error:", err.response?.data || err.message);
+    }
   };
 
   const handleAddItem = async () => {
@@ -53,7 +57,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
         total: totalItem
       });
 
-      fetchCart(activeId);
+      await fetchCart(activeId);
       setQuantity(1);
 
     } catch (err) {
