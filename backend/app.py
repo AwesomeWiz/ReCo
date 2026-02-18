@@ -15,5 +15,9 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(sales_bp)
 app.register_blueprint(inventory_bp)
 
+@app.route("/")
+def home():
+    return "Backend running"
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
