@@ -174,7 +174,7 @@ export default function ScanScreen({ navigation, route }) {
       {/* Barcode Toggle */}
       <TouchableOpacity
         style={styles.barcodeBtn}
-        onPress={() => setBarcodeMode(true)}
+        onPress={() => navigation.navigate("BarcodeScanner")}
       >
         <AppText style={{ color: "#fff", fontWeight: "600" }}>
           Scan Barcode

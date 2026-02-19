@@ -16,7 +16,7 @@ def get_inventory(user_id):
 
     try:
         cur.execute("""
-            SELECT id, product_name, category, price, stock
+            SELECT id, product_name, category, price, stock, barcode
             FROM inventory
             WHERE shop_id = %s
             ORDER BY created_at DESC
@@ -45,6 +45,7 @@ def add_inventory_item(user_id):
     try:
         product_name = data.get("name")
         category = data.get("category", "")
+        barcode = data.get("barcode", None)  # ✅ Get barcode
 
         if "price" not in data:
             return jsonify({"error": "Missing field: price"}), 400
@@ -60,10 +61,11 @@ def add_inventory_item(user_id):
                 product_name,
                 category,
                 price,
-                stock
+                stock,
+                barcode
             )
-            VALUES (%s, %s, %s, %s, %s)
-        """, (user_id, product_name, category, price, stock))
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (user_id, product_name, category, price, stock, barcode))
 
         conn.commit()
 
@@ -77,6 +79,50 @@ def add_inventory_item(user_id):
         cur.close()
         conn.close()
 
+
+# ─────────────────────────────────────────────
+# BARCODE LOOKUP
+# ─────────────────────────────────────────────
+@inventory_bp.route("/inventory/barcode-lookup", methods=["POST"])
+@token_required
+def barcode_lookup(user_id):
+    data = request.json
+    barcode = data.get("barcode")
+
+    if not barcode:
+        return jsonify({"error": "Missing barcode"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, product_name, category, price, stock, barcode
+            FROM inventory
+            WHERE shop_id = %s AND barcode = %s
+            LIMIT 1
+        """, (user_id, barcode))
+
+        item = cur.fetchone()
+
+        if item:
+            return jsonify({
+                "found": True,
+                "product": {
+                    "id": item["id"],
+                    "name": item["product_name"],
+                    "category": item["category"],
+                    "price": float(item["price"]),
+                    "stock": item["stock"],
+                    "barcode": item["barcode"]
+                }
+            })
+        else:
+            return jsonify({"found": False, "message": "Product not found"}), 200
+
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ─────────────────────────────────────────────

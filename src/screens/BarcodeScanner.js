@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import AppText from "../components/AppText";
@@ -8,6 +8,31 @@ export default function BarcodeScannerScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
 
+  // ✅ Hooks MUST be before any conditional returns
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        console.log("Testing connection to:", api.defaults.baseURL);
+        const healthCheck = await api.get("/inventory");
+        console.log("Health check (GET /inventory):", healthCheck.status);
+
+        try {
+          await api.post("/inventory/barcode-lookup", {});
+        } catch (err) {
+          console.log(
+            "Route check (POST /inventory/barcode-lookup):",
+            err.response?.status,
+            err.response?.data
+          );
+        }
+      } catch (err) {
+        console.log("Connection test failed:", err.message);
+      }
+    };
+    testConnection();
+  }, []);
+
+  // ✅ Conditional returns AFTER all hooks
   if (!permission) return <View />;
 
   if (!permission.granted) {
@@ -15,67 +40,61 @@ export default function BarcodeScannerScreen({ navigation, route }) {
       <View style={styles.center}>
         <AppText>Camera permission required</AppText>
         <TouchableOpacity onPress={requestPermission}>
-          <AppText style={{ color: "#3A6FF7" }}>
-            Grant Permission
-          </AppText>
+          <AppText style={{ color: "#3A6FF7" }}>Grant Permission</AppText>
         </TouchableOpacity>
       </View>
     );
   }
 
- const handleScan = async ({ data }) => {
-  if (isScanning) return;
+  const handleScan = async ({ data }) => {
+    if (isScanning) return;
+    setIsScanning(true);
 
-  setIsScanning(true);
+    try {
+      // 🔹 INVENTORY MODE
+      if (route?.params?.mode === "inventory") {
+        route.params.onScan(data);
+        navigation.goBack();
+        return;
+      }
 
-  try {
-    // 🔹 INVENTORY MODE
-    if (route?.params?.mode === "inventory") {
-      route.params.onScan(data);
-      navigation.goBack();
-      return;
-    }
-
-    // 🔹 SALES MODE
-    const res = await api.post("/inventory/barcode-lookup", {
-      barcode: data,
-    });
-
-    if (res.data.found) {
-      navigation.replace("ConfirmProduct", {
-        prediction: {
-          productName: res.data.product.name,
-          category: res.data.product.category,
-          price: res.data.product.price,
-          stock: res.data.product.stock,
-          barcode: res.data.product.barcode,
-        },
+      // 🔹 SALES MODE — lookup barcode in inventory
+      const res = await api.post("/inventory/barcode-lookup", {
+        barcode: data,
       });
-    } else {
-      Alert.alert("No product found in inventory");
-      setIsScanning(false); // allow scanning again
-      return;
-    }
 
-  } catch (err) {
-    console.log(err.response?.data || err.message);
-    Alert.alert("No product found in inventory");
-    setIsScanning(false);
-  }
-};
+      if (res.data.found) {
+        navigation.replace("ConfirmProduct", {
+          prediction: {
+            productName: res.data.product.name,
+            category: res.data.product.category,
+            price: res.data.product.price,
+            stock: res.data.product.stock,
+            barcode: res.data.product.barcode,
+            confidence: 1.0,
+          },
+        });
+      } else {
+        Alert.alert(
+          "Product Not Found",
+          res.data.message || "No product with this barcode exists."
+        );
+        setIsScanning(false);
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || err.message;
+      console.log("Barcode lookup error:", errorMsg);
+      Alert.alert("Lookup Failed", errorMsg);
+      setIsScanning(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <CameraView
         style={styles.camera}
         barcodeScannerSettings={{
-          barcodeTypes: [
-            "ean13",
-            "ean8",
-            "code128",
-            "upc_a",
-            "upc_e",
-          ],
+          barcodeTypes: ["ean13", "ean8", "code128", "upc_a", "upc_e"],
         }}
         onBarcodeScanned={handleScan}
       />

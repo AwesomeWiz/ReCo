@@ -121,6 +121,9 @@ export default function InventoryScreen({ navigation }) {
         {/* ADD FORM */}
         {showAdd && (
           <View style={s.formCard}>
+          <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+            Product Name
+          </AppText>
             <TextInput
               placeholder="Search or Enter Product Name"
               style={s.input}
@@ -195,7 +198,9 @@ export default function InventoryScreen({ navigation }) {
                 ))}
               </View>
             </View>
-
+            <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+              Price
+            </AppText>
             <TextInput
               placeholder="Price"
               keyboardType="numeric"
@@ -203,7 +208,9 @@ export default function InventoryScreen({ navigation }) {
               value={price}
               onChangeText={setPrice}
             />
-
+            <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+  Stock
+</AppText>
             <TextInput
               placeholder="Stock"
               keyboardType="numeric"
