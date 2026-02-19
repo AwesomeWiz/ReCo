@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -13,8 +14,8 @@ import AppText from "../components/AppText";
 import api from "../api/api";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
-const BG     = "#F5F1E8";
-const WHITE  = "#FFFFFF";
+const BG = "#F5F1E8";
+const WHITE = "#FFFFFF";
 const ACCENT = "#3A6FF7";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ const TODAY = "20/01/2026";
 const PIE_SIZE = 220;
 const CX = PIE_SIZE / 2;
 const CY = PIE_SIZE / 2;
-const R  = 98;
+const R = 98;
 
 function deg2rad(deg) { return (deg - 90) * (Math.PI / 180); }
 
@@ -53,7 +54,7 @@ function PieChart({ segments }) {
   let cursor = 0;
   const slices = segments.map((seg) => {
     const start = cursor;
-    const end   = cursor + (seg.pct / 100) * 360;
+    const end = cursor + (seg.pct / 100) * 360;
     cursor = end;
     return { ...seg, start, end };
   });
@@ -126,7 +127,7 @@ function DottedLine() {
 function ZigzagEdge({ flip = false }) {
   return (
     <View style={[
-      s.zigRow, 
+      s.zigRow,
       flip ? { bottom: -3 } : { top: -3 }
     ]}>
       {Array.from({ length: 24 }).map((_, i) => (
@@ -143,9 +144,9 @@ function SaleRow({ item }) {
       <AppText font="billsemi" style={[s.cell, s.colDesc]} numberOfLines={1}>
         {item.description}
       </AppText>
-      <AppText font="billsemi" style={[s.cell, s.colNum]}>{item.qty.toFixed(2)}</AppText>
-      <AppText font="billsemi" style={[s.cell, s.colNum]}>{item.rate.toFixed(2)}</AppText>
-      <AppText font="billsemi" style={[s.cell, s.colNum]}>{item.amount.toFixed(2)}</AppText>
+      <AppText font="billsemi" style={[s.cell, s.colNum]}>{Number(item.qty || 0).toFixed(2)}</AppText>
+      <AppText font="billsemi" style={[s.cell, s.colNum]}>{Number(item.rate || 0).toFixed(2)}</AppText>
+      <AppText font="billsemi" style={[s.cell, s.colNum]}>{Number(item.amount || 0).toFixed(2)}</AppText>
     </View>
   );
 }
@@ -153,6 +154,8 @@ function SaleRow({ item }) {
 // ─── DashboardScreen ─────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const [sales, setSales] = useState([]);
+  const [shopName, setShopName] = useState("");
+  const [shopLocation, setShopLocation] = useState("");
   const totalRevenue = sales.reduce(
     (sum, s) => sum + Number(s.amount || 0),
     0
@@ -183,6 +186,14 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchTodaySales();
+      (async () => {
+        const name = await AsyncStorage.getItem("store_name");
+        const state = await AsyncStorage.getItem("state");
+        const country = await AsyncStorage.getItem("country");
+        setShopName((name || "My Store").toUpperCase());
+        const parts = [state, country].filter(Boolean);
+        setShopLocation(parts.join(", ").toUpperCase());
+      })();
     }, [])
   );
 
@@ -205,8 +216,8 @@ export default function DashboardScreen() {
           <ZigzagEdge />
 
           <View style={s.receiptBody}>
-            <AppText font="billbold" style={s.shopName}>SR BAKERY</AppText>
-            <AppText font="billsemi" style={s.shopCity}>KOCHI, KERALA</AppText>
+            <AppText font="billbold" style={s.shopName}>{shopName}</AppText>
+            <AppText font="billsemi" style={s.shopCity}>{shopLocation}</AppText>
 
             <DottedLine />
             <AppText font="billbold" style={s.saleBanner}>TODAY'S SALE</AppText>

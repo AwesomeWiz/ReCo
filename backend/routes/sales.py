@@ -208,6 +208,54 @@ def complete_transaction(user_id):
 
 
 # ─────────────────────────────────────────────
+# GET TRANSACTIONS BY DATE (Sales History)
+# ─────────────────────────────────────────────
+@sales_bp.route("/transactions/by-date", methods=["GET"])
+@token_required
+def get_transactions_by_date(user_id):
+
+    date_str = request.args.get("date")  # expected format: YYYY-MM-DD
+    if not date_str:
+        return jsonify({"error": "date query parameter is required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, transaction_code, total, created_at
+            FROM transactions
+            WHERE shop_id = %s
+              AND status = 'completed'
+              AND DATE(created_at) = %s
+            ORDER BY created_at DESC
+        """, (user_id, date_str))
+
+        rows = cur.fetchall()
+
+        result = [
+            {
+                "id": row["id"],
+                "transaction_code": row["transaction_code"],
+                "total": float(row["total"]),
+                "formatted_time": row["created_at"].strftime("%I:%M %p")
+                    if hasattr(row["created_at"], "strftime")
+                    else str(row["created_at"]),
+            }
+            for row in rows
+        ]
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─────────────────────────────────────────────
 # GET TODAY SALES (Dashboard)
 # ─────────────────────────────────────────────
 @sales_bp.route("/sales/today", methods=["GET"])
