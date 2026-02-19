@@ -82,18 +82,29 @@ export default function AnalyticsScreen() {
   const fetchAll = useCallback(async (sel = period) => {
     try {
       setError(null);
-      const [sumRes, fcastRes, demRes, soRes] = await Promise.all([
+      const [sumRes, fcastRes, demRes, soRes] = await Promise.allSettled([
         api.get(`/analytics/summary?period=${sel}`),
         api.get("/analytics/forecast"),
         api.get("/analytics/demand"),
         api.get("/analytics/stockout-risk"),
       ]);
-      setSummary(sumRes.data);
-      setForecast(fcastRes.data);
-      setDemand(demRes.data);
-      setStockout(soRes.data);
+
+      // Each result is independent — set data if fulfilled, null if rejected
+      setSummary(sumRes.status === "fulfilled" ? sumRes.value.data : null);
+      setForecast(fcastRes.status === "fulfilled" ? fcastRes.value.data : null);
+      setDemand(demRes.status === "fulfilled" ? demRes.value.data : null);
+      setStockout(soRes.status === "fulfilled" ? soRes.value.data : null);
+
+      // Only show error if ALL endpoints failed
+      const allFailed = [sumRes, fcastRes, demRes, soRes].every(
+        (r) => r.status === "rejected"
+      );
+      if (allFailed) {
+        const firstErr = sumRes.reason;
+        setError(firstErr?.response?.data?.error || firstErr?.message || "Failed to load analytics");
+      }
     } catch (e) {
-      setError(e.response?.data?.error || e.message || "Failed to load analytics");
+      setError(e.message || "Failed to load analytics");
     } finally {
       setLoading(false);
       setRefreshing(false);
