@@ -39,15 +39,21 @@ def get_inventory(user_id):
 def add_inventory_item(user_id):
     data = request.json
 
-    product_name = data.get("name")
-    category = data.get("category", "")
-    price = data["price"]
-    stock = data["stock"]
-
     conn = get_connection()
     cur = conn.cursor()
 
     try:
+        product_name = data.get("name")
+        category = data.get("category", "")
+
+        if "price" not in data:
+            return jsonify({"error": "Missing field: price"}), 400
+        if "stock" not in data:
+            return jsonify({"error": "Missing field: stock"}), 400
+
+        price = data["price"]
+        stock = data["stock"]
+
         cur.execute("""
             INSERT INTO inventory (
                 shop_id,
@@ -72,6 +78,7 @@ def add_inventory_item(user_id):
         conn.close()
 
 
+
 # ─────────────────────────────────────────────
 # UPDATE STOCK
 # ─────────────────────────────────────────────
@@ -80,13 +87,18 @@ def add_inventory_item(user_id):
 def update_stock(user_id):
     data = request.json
 
-    item_id = data["id"]
-    stock = data["stock"]
-
     conn = get_connection()
     cur = conn.cursor()
 
     try:
+        if "id" not in data:
+            return jsonify({"error": "Missing field: id"}), 400
+        if "stock" not in data:
+            return jsonify({"error": "Missing field: stock"}), 400
+
+        item_id = data["id"]
+        stock = data["stock"]
+
         cur.execute("""
             UPDATE inventory
             SET stock = %s
@@ -96,6 +108,7 @@ def update_stock(user_id):
         conn.commit()
 
         return jsonify({"message": "Stock updated"}), 200
+
 
     finally:
         cur.close()

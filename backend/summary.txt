@@ -1,0 +1,50 @@
+﻿============================================================
+1. ADD TO CART FLOW
+============================================================
+[OK  ] POST /transactions/start                       HTTP 201
+{"transaction_code": "TXN20260219112559", "transaction_id": 24}
+-> Got transaction_id = 24
+[OK  ] POST /transactions/add-item (valid)            HTTP 200
+{"message": "Item added successfully"}
+[OK  ] POST /transactions/add-item (second item)      HTTP 200
+{"message": "Item added successfully"}
+[OK  ] GET /transactions/24                           HTTP 200
+{"items": [{"amount": "40.00", "description": "Parle-G Biscuits", "qty": 2, "rate": "20.00"}, {"amount": "30.00", "description": "Pepsi 500ml", "qty": 1, "rate": "30.00"}]}
+[OK  ] POST /transactions/add-item (bad txn_id) ΓåÆ expect 400  HTTP 400
+{"error": "Invalid or completed transaction"}
+[OK  ] POST /transactions/add-item (missing fields) ΓåÆ expect 400  HTTP 400
+{"error": "Missing field: 'price'"}
+[OK  ] POST /transactions/complete                    HTTP 200
+{"message": "Transaction completed"}
+[OK  ] POST /transactions/add-item (completed txn) ΓåÆ expect 400  HTTP 400
+{"error": "Invalid or completed transaction"}
+============================================================
+2. ADD TO INVENTORY FLOW
+============================================================
+[OK  ] POST /inventory/add (valid product)            HTTP 201
+{"message": "Product added to inventory"}
+[OK  ] POST /inventory/add (second product)           HTTP 201
+{"message": "Product added to inventory"}
+[INFO] Missing price field (expect error):
+[OK  ] POST /inventory/add (missing price) ΓåÆ expect error  HTTP 500
+RAW: <!doctype html>
+<html lang=en>
+<head>
+<title>KeyError: &#39;price&#39;
+// Werkzeug Debugger</title>
+<link rel="stylesheet" href="?__debugger__=yes&amp;cmd=resource&amp;f=style.css">
+<li
+[OK  ] GET /inventory                                 HTTP 200
+[{"category": "Snacks", "id": 5, "price": "20.00", "product_name": "Lay's Classic Salted", "stock": 50}, {"category": "Beverages", "id": 6, "price": "40.00", "product_name": "Coca-Cola 500ml", "stock": 100}, {"category": "Snacks", "id": 3, "price": "20.00", "product_name": "Lay's Classic Salted", "s
+-> 6 product(s) in inventory
+============================================================
+3. AUTH CHECKS
+============================================================
+[OK  ] POST /transactions/start (no token) ΓåÆ expect 401  HTTP 401
+{"message": "Token missing"}
+[OK  ] POST /inventory/add (no token) ΓåÆ expect 401    HTTP 401
+{"message": "Token missing"}
+============================================================
+PASSED: 14/14   FAILED: 0/14
+ALL TESTS PASSED
+============================================================
