@@ -20,7 +20,7 @@ export default function LoginScreen({ navigation }) {
 const handleLogin = async () => {
   try {
 
-    const res = await axios.post("http://10.0.9.80:5000/login", {
+    const res = await axios.post("http://10.221.189.142:5000/login", {
       phone,
       password
     });
