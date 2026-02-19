@@ -1,0 +1,48 @@
+=== ADD TO CART FLOW ===
+[OK  ] POST /transactions/start
+       HTTP 201 | {"transaction_code": "TXN20260219113041", "transaction_id": 26}
+  transaction_id = 26
+[OK  ] POST /transactions/add-item (valid)
+       HTTP 200 | {"message": "Item added successfully"}
+[OK  ] POST /transactions/add-item (2nd item)
+       HTTP 200 | {"message": "Item added successfully"}
+[OK  ] GET /transactions/26
+       HTTP 200 | {"items": [{"amount": "40.00", "description": "Parle-G", "qty": 2, "rate": "20.00"}, {"amount": "30.00", "description": "Pepsi 500ml", "qty": 1, "rate": "30.00"}]}
+  cart has 2 item(s): ['Parle-G', 'Pepsi 500ml']
+[OK  ] POST /transactions/add-item (bad txn) -> expect 400
+       HTTP 400 | {"error": "Invalid or completed transaction"}
+[OK  ] POST /transactions/add-item (missing fields) -> expect 400
+       HTTP 400 | {"error": "Missing field: 'price'"}
+[OK  ] POST /transactions/complete
+       HTTP 200 | {"message": "Transaction completed"}
+[OK  ] POST /transactions/add-item (completed txn) -> expect 400
+       HTTP 400 | {"error": "Invalid or completed transaction"}
+
+=== ADD TO INVENTORY FLOW ===
+[OK  ] POST /inventory/add (valid)
+       HTTP 201 | {"message": "Product added to inventory"}
+[OK  ] POST /inventory/add (2nd product)
+       HTTP 201 | {"message": "Product added to inventory"}
+[FAIL] POST /inventory/add (missing price) -> expect 400
+       HTTP 500 | <!doctype html>
+<html lang=en>
+  <head>
+    <title>KeyError: &#39;price&#39;
+ // Werkzeug Debugger</title>
+    <link rel="stylesheet" href="?__debugger__=yes&amp;cmd=resource&amp;f=style.css">
+    <li
+[OK  ] GET /inventory
+       HTTP 200 | [{"category": "Snacks", "id": 9, "price": "20.00", "product_name": "Lays Classic", "stock": 50}, {"category": "Beverages", "id": 10, "price": "40.00", "product_name": "Coca-Cola 500ml", "stock": 100},
+  inventory has 10 product(s)
+    - Lays Classic | price=20.00 | stock=50
+    - Coca-Cola 500ml | price=40.00 | stock=100
+    - Lays Classic | price=20.00 | stock=50
+
+=== AUTH CHECKS ===
+[OK  ] POST /transactions/start (no token) -> expect 401
+       HTTP 401 | {"message": "Token missing"}
+[OK  ] POST /inventory/add (no token) -> expect 401
+       HTTP 401 | {"message": "Token missing"}
+
+=== SUMMARY: PASSED 13/14  FAILED 1/14 ===
+SOME TESTS FAILED (1)

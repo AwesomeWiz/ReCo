@@ -2,3 +2,8 @@ flask
 flask-cors
 pymysql
 bcrypt
+pandas
+statsmodels
+python-dotenv
+PyJWT
+cryptography

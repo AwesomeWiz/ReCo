@@ -17,27 +17,30 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
 
 
-const handleLogin = async () => {
-  try {
+  const handleLogin = async () => {
+    try {
 
     const res = await axios.post("http://10.0.9.80:5000/login", {
       phone,
       password
     });
 
-    console.log("Login response:", res.data);   // MOVE HERE
+      console.log("Login response:", res.data);
 
-    await AsyncStorage.setItem("token", res.data.token);
+      await AsyncStorage.setItem("token", res.data.token);
+      await AsyncStorage.setItem("store_name", res.data.store_name || "");
+      await AsyncStorage.setItem("state", res.data.state || "");
+      await AsyncStorage.setItem("country", res.data.country || "");
 
-    const saved = await AsyncStorage.getItem("token");
-    console.log("Saved token:", saved);
+      const saved = await AsyncStorage.getItem("token");
+      console.log("Saved token:", saved);
 
-    navigation.replace("Main");
+      navigation.replace("Main");
 
-  } catch (err) {
-    Alert.alert("Error", "Invalid credentials");
-  }
-};
+    } catch (err) {
+      Alert.alert("Error", "Invalid credentials");
+    }
+  };
 
 
   return (
