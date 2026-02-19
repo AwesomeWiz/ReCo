@@ -323,22 +323,42 @@ def get_daily_sales(user_id):
 
 
 # ─────────────────────────────────────────────
+# HELPER: Build continuous daily series (fill gaps with 0)
+# ─────────────────────────────────────────────
+def _fill_date_gaps(dates, values):
+    """Given parallel lists of dates + values, return a daily-frequency
+    Series with missing dates filled as 0."""
+    if len(dates) == 0:
+        return pd.Series(dtype=float)
+    df = pd.DataFrame({"date": pd.to_datetime(dates), "val": values})
+    df = df.groupby("date")["val"].sum().sort_index()
+    full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq="D")
+    return df.reindex(full_idx, fill_value=0.0)
+
+
+# ─────────────────────────────────────────────
 # HELPER: Run ARIMA or fallback moving average
 # ─────────────────────────────────────────────
 def _arima_or_fallback(series, steps=7):
-    """Returns list of `steps` forecast values."""
-    if len(series) >= 5:
-        try:
-            model = ARIMA(series, order=(1, 1, 1))
-            fit = model.fit()
-            forecast = fit.forecast(steps=steps)
-            return [max(0.0, float(v)) for v in forecast]
-        except Exception:
-            pass
-    # Fallback: moving average of last 3 points
-    window = series[-3:] if len(series) >= 3 else series
-    avg = float(np.mean(window)) if len(window) > 0 else 0.0
-    return [round(avg, 2)] * steps
+    """Returns list of `steps` forecast values.
+    Tries multiple ARIMA orders; falls back to moving average."""
+    arr = np.asarray(series, dtype=float)
+    if len(arr) >= 5:
+        for order in [(1, 1, 1), (1, 0, 1), (0, 1, 1), (2, 1, 0)]:
+            try:
+                model = ARIMA(arr, order=order)
+                fit = model.fit()
+                forecast = fit.forecast(steps=steps)
+                return [max(0.0, round(float(v), 2)) for v in forecast]
+            except Exception:
+                continue
+    # Fallback: weighted moving average of last 5 points (or fewer)
+    window = arr[-5:] if len(arr) >= 5 else arr
+    if len(window) == 0:
+        return [0.0] * steps
+    weights = np.arange(1, len(window) + 1, dtype=float)
+    avg = float(np.average(window, weights=weights))
+    return [round(max(0.0, avg), 2)] * steps
 
 
 # ─────────────────────────────────────────────
@@ -364,20 +384,20 @@ def forecast_sales(user_id):
 
         rows = cur.fetchall()
 
-        if len(rows) < 3:
-            return jsonify({
-                "error": "Not enough historical data for forecasting"
-            }), 400
+        if len(rows) < 1:
+            # Truly no data — return empty forecast instead of error
+            return jsonify([])
 
-        df = pd.DataFrame(rows)
-        df["date"] = pd.to_datetime(df["date"])
-        df["total_sales"] = pd.to_numeric(df["total_sales"], errors="coerce").fillna(0)
-        df = df.set_index("date").sort_index()
+        # Build continuous daily series (fill date gaps with 0)
+        dates = [r["date"] for r in rows]
+        values = [float(r["total_sales"]) for r in rows]
+        daily_series = _fill_date_gaps(dates, values)
 
-        forecast_values = _arima_or_fallback(df["total_sales"].values, steps=7)
+        forecast_values = _arima_or_fallback(daily_series.values, steps=7)
 
+        last_date = daily_series.index[-1]
         future_dates = pd.date_range(
-            start=df.index[-1] + pd.Timedelta(days=1),
+            start=last_date + pd.Timedelta(days=1),
             periods=7
         )
 
@@ -490,8 +510,10 @@ def analytics_summary(user_id):
             sales_rows = cur.fetchall()
 
             if sales_rows:
-                qty_series = [float(r["qty"]) for r in sales_rows]
-                demand_7d = sum(_arima_or_fallback(qty_series, steps=7))
+                dates = [r["date"] for r in sales_rows]
+                values = [float(r["qty"]) for r in sales_rows]
+                daily = _fill_date_gaps(dates, values)
+                demand_7d = sum(_arima_or_fallback(daily.values, steps=7))
                 if item["stock"] <= demand_7d:
                     stock_risk = True
                     break
@@ -563,8 +585,13 @@ def demand_forecast(user_id):
             """, (user_id, pname))
             rows = cur.fetchall()
 
-            qty_series = [float(r["qty"]) for r in rows]
-            forecast = _arima_or_fallback(qty_series, steps=7)
+            if rows:
+                dates = [r["date"] for r in rows]
+                values = [float(r["qty"]) for r in rows]
+                daily = _fill_date_gaps(dates, values)
+                forecast = _arima_or_fallback(daily.values, steps=7)
+            else:
+                forecast = [0.0] * 7
 
             result.append({
                 "product_name": pname,
@@ -621,8 +648,10 @@ def stockout_risk(user_id):
             rows = cur.fetchall()
 
             if rows:
-                qty_series = [float(r["qty"]) for r in rows]
-                forecast_7d = _arima_or_fallback(qty_series, steps=7)
+                dates = [r["date"] for r in rows]
+                values = [float(r["qty"]) for r in rows]
+                daily = _fill_date_gaps(dates, values)
+                forecast_7d = _arima_or_fallback(daily.values, steps=7)
                 demand_7d = sum(forecast_7d)
             else:
                 demand_7d = 0.0
