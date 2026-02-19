@@ -1,66 +1,130 @@
--- MySQL dump 10.13  Distrib 8.0.45, for Win64 (x86_64)
---
--- Host: localhost    Database: reco
--- ------------------------------------------------------
--- Server version	9.6.0
+DROP DATABASE IF EXISTS reco;
+CREATE DATABASE reco;
+USE reco;
 
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8 */;
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
-/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
-/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
-/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
-/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;
-SET @@SESSION.SQL_LOG_BIN= 0;
+CREATE TABLE shops (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    store_name VARCHAR(255),
+    phone VARCHAR(20) UNIQUE,
+    password_hash VARCHAR(255),
+    country VARCHAR(100),
+    state VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
---
--- GTID state at the beginning of the backup 
---
+CREATE TABLE transactions (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    shop_id INT NOT NULL,
+    transaction_code VARCHAR(20) NOT NULL,
+    total DECIMAL(10,2) NOT NULL,
+    status ENUM('active','completed') DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX (shop_id),
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+) ENGINE=InnoDB;
 
-SET @@GLOBAL.GTID_PURGED=/*!80000 '+'*/ '2548e6af-0518-11f1-9f87-04d4c4dd0839:1-7';
+CREATE TABLE sales (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shop_id INT NOT NULL,
+  product_name VARCHAR(255) NOT NULL,
+  category VARCHAR(100),
+  price DECIMAL(10,2) NOT NULL,
+  quantity INT NOT NULL,
+  total DECIMAL(10,2) NOT NULL,
+  transaction_id INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+  INDEX (transaction_id)
+);
 
---
--- Table structure for table `shops`
---
+CREATE TABLE inventory (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    shop_id INT NOT NULL,
+    product_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100),
+    price DECIMAL(10,2) NOT NULL,
+    stock INT NOT NULL DEFAULT 0,
+    barcode VARCHAR(50) UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+);
 
-DROP TABLE IF EXISTS `shops`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `shops` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `store_name` varchar(255) DEFAULT NULL,
-  `phone` varchar(20) DEFAULT NULL,
-  `password_hash` varchar(255) DEFAULT NULL,
-  `country` varchar(100) DEFAULT NULL,
-  `state` varchar(100) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `phone` (`phone`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
+-- Insert dummy shop (id=1)
+INSERT INTO shops (id, store_name, phone, password_hash, country, state) VALUES 
+(1, 'Test Store', '9999999999', '$2b$12$T36YDUZ6Tdnu9GlcJU/KeOOgtB218HTCEO0OC7rmbQ1TMDR/0ROzK', 'India', 'Kerala');
 
---
--- Dumping data for table `shops`
---
+-- Insert transactions (20 completed, spanning Jan 15 – Feb 3, 2026)
+INSERT INTO transactions (shop_id, transaction_code, total, created_at, status)
+VALUES
+(1, 'TXN101', 800,  '2026-01-15 10:00:00', 'completed'),
+(1, 'TXN102', 1200, '2026-01-16 11:00:00', 'completed'),
+(1, 'TXN103', 900,  '2026-01-17 12:00:00', 'completed'),
+(1, 'TXN104', 1500, '2026-01-18 09:30:00', 'completed'),
+(1, 'TXN105', 1100, '2026-01-19 15:45:00', 'completed'),
+(1, 'TXN106', 700,  '2026-01-20 13:10:00', 'completed'),
+(1, 'TXN107', 1300, '2026-01-21 17:20:00', 'completed'),
+(1, 'TXN108', 950,  '2026-01-22 14:50:00', 'completed'),
+(1, 'TXN109', 1600, '2026-01-23 18:30:00', 'completed'),
+(1, 'TXN110', 1250, '2026-01-24 12:15:00', 'completed'),
+(1, 'TXN111', 1050, '2026-01-25 10:40:00', 'completed'),
+(1, 'TXN112', 1700, '2026-01-26 16:00:00', 'completed'),
+(1, 'TXN113', 980,  '2026-01-27 11:30:00', 'completed'),
+(1, 'TXN114', 1400, '2026-01-28 09:20:00', 'completed'),
+(1, 'TXN115', 1150, '2026-01-29 14:10:00', 'completed'),
+(1, 'TXN116', 1350, '2026-01-30 13:00:00', 'completed'),
+(1, 'TXN117', 900,  '2026-01-31 15:45:00', 'completed'),
+(1, 'TXN118', 1500, '2026-02-01 10:00:00', 'completed'),
+(1, 'TXN119', 1250, '2026-02-02 11:10:00', 'completed'),
+(1, 'TXN120', 1600, '2026-02-03 12:20:00', 'completed');
 
-LOCK TABLES `shops` WRITE;
-/*!40000 ALTER TABLE `shops` DISABLE KEYS */;
-INSERT INTO `shops` VALUES (1,'Test Store','9999999999','$2b$12$T36YDUZ6Tdnu9GlcJU/KeOOgtB218HTCEO0OC7rmbQ1TMDR/0ROzK','India','Kerala','2026-02-08 18:16:40'),(2,'Test store','84646464846','$2b$12$T8uJttQeWJkasHvNGx3VOerJPr68ThRo5MDmwQm6bS5xOCou9hV4C','India','Kerala','2026-02-08 18:24:04'),(3,'SR Bakery','9846586002','$2b$12$IeqmqBMDt0da3XUUuZ7QZe9GFn0fc242moZHtPj40Nvdt8Wcr3EU.','India','Kerala','2026-02-08 18:41:29');
-/*!40000 ALTER TABLE `shops` ENABLE KEYS */;
-UNLOCK TABLES;
-SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+-- Populate sales data with specific products and categories
+INSERT INTO sales (shop_id, transaction_id, product_name, category, price, quantity, total, created_at)
+VALUES
+(1, 1, 'Milk',   'Dairy',     50,  8,  400,  '2026-01-15 10:00:00'),
+(1, 1, 'Bread',  'Bakery',    40,  10, 400,  '2026-01-15 10:05:00'),
+(1, 2, 'Rice',   'Groceries', 60,  10, 600,  '2026-01-16 11:00:00'),
+(1, 2, 'Sugar',  'Groceries', 50,  12, 600,  '2026-01-16 11:05:00'),
+(1, 3, 'Eggs',   'Dairy',     10,  30, 300,  '2026-01-17 12:00:00'),
+(1, 3, 'Bread',  'Bakery',    40,  15, 600,  '2026-01-17 12:05:00'),
+(1, 4, 'Milk',   'Dairy',     50,  15, 750,  '2026-01-18 09:30:00'),
+(1, 4, 'Rice',   'Groceries', 60,  12, 720,  '2026-01-18 09:35:00'),
+(1, 5, 'Sugar',  'Groceries', 50,  10, 500,  '2026-01-19 15:45:00'),
+(1, 5, 'Eggs',   'Dairy',     10,  60, 600,  '2026-01-19 15:50:00'),
+(1, 6, 'Bread',  'Bakery',    40,  10, 400,  '2026-01-20 13:10:00'),
+(1, 6, 'Milk',   'Dairy',     50,  6,  300,  '2026-01-20 13:15:00'),
+(1, 7, 'Rice',   'Groceries', 60,  12, 720,  '2026-01-21 17:20:00'),
+(1, 7, 'Sugar',  'Groceries', 50,  11, 550,  '2026-01-21 17:25:00'),
+(1, 8, 'Eggs',   'Dairy',     10,  45, 450,  '2026-01-22 14:50:00'),
+(1, 8, 'Bread',  'Bakery',    40,  12, 480,  '2026-01-22 14:55:00'),
+(1, 9, 'Milk',   'Dairy',     50,  16, 800,  '2026-01-23 18:30:00'),
+(1, 9, 'Rice',   'Groceries', 60,  13, 780,  '2026-01-23 18:35:00'),
+(1, 10, 'Sugar', 'Groceries', 50,  12, 600,  '2026-01-24 12:15:00'),
+(1, 10, 'Eggs',  'Dairy',     10,  65, 650,  '2026-01-24 12:20:00'),
+(1, 11, 'Bread', 'Bakery',    40,  12, 480,  '2026-01-25 10:40:00'),
+(1, 11, 'Milk',  'Dairy',     50,  11, 550,  '2026-01-25 10:45:00'),
+(1, 12, 'Rice',  'Groceries', 60,  15, 900,  '2026-01-26 16:00:00'),
+(1, 12, 'Sugar', 'Groceries', 50,  16, 800,  '2026-01-26 16:05:00'),
+(1, 13, 'Eggs',  'Dairy',     10,  48, 480,  '2026-01-27 11:30:00'),
+(1, 13, 'Bread', 'Bakery',    40,  12, 480,  '2026-01-27 11:35:00'),
+(1, 14, 'Milk',  'Dairy',     50,  14, 700,  '2026-01-28 09:20:00'),
+(1, 14, 'Rice',  'Groceries', 60,  11, 660,  '2026-01-28 09:25:00'),
+(1, 15, 'Sugar', 'Groceries', 50,  11, 550,  '2026-01-29 14:10:00'),
+(1, 15, 'Eggs',  'Dairy',     10,  60, 600,  '2026-01-29 14:15:00'),
+(1, 16, 'Bread', 'Bakery',    40,  15, 600,  '2026-01-30 13:00:00'),
+(1, 16, 'Milk',  'Dairy',     50,  15, 750,  '2026-01-30 13:05:00'),
+(1, 17, 'Rice',  'Groceries', 60,  8,  480,  '2026-01-31 15:45:00'),
+(1, 17, 'Sugar', 'Groceries', 50,  8,  400,  '2026-01-31 15:50:00'),
+(1, 18, 'Eggs',  'Dairy',     10,  70, 700,  '2026-02-01 10:00:00'),
+(1, 18, 'Bread', 'Bakery',    40,  20, 800,  '2026-02-01 10:05:00'),
+(1, 19, 'Milk',  'Dairy',     50,  13, 650,  '2026-02-02 11:10:00'),
+(1, 19, 'Rice',  'Groceries', 60,  10, 600,  '2026-02-02 11:15:00'),
+(1, 20, 'Sugar', 'Groceries', 50,  14, 700,  '2026-02-03 12:20:00'),
+(1, 20, 'Eggs',  'Dairy',     10,  90, 900,  '2026-02-03 12:25:00');
 
-/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
-/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
-/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
--- Dump completed on 2026-02-09  2:00:39
+-- Insert inventory items (for stockout risk analysis)
+INSERT INTO inventory (shop_id, product_name, category, price, stock, barcode) VALUES
+(1, 'Milk',  'Dairy',     50,  25,  'BAR001'),
+(1, 'Bread', 'Bakery',    40,  18,  'BAR002'),
+(1, 'Eggs',  'Dairy',     10,  100, 'BAR003'),
+(1, 'Rice',  'Groceries', 60,  20,  'BAR004'),
+(1, 'Sugar', 'Groceries', 50,  15,  'BAR005');
