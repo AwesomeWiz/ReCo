@@ -20,10 +20,10 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     try {
 
-    const res = await axios.post("http://10.0.9.142:5000/login", {
-      phone,
-      password
-    });
+      const res = await axios.post("http://10.0.9.142:5000/login", {
+        phone,
+        password
+      });
 
       console.log("Login response:", res.data);
 
@@ -59,6 +59,7 @@ export default function LoginScreen({ navigation }) {
           />
           <TextInput
             placeholder="Phone Number"
+            placeholderTextColor="#999999"
             style={styles.textInput}
             keyboardType="phone-pad"
             value={phone}
@@ -73,6 +74,7 @@ export default function LoginScreen({ navigation }) {
           />
           <TextInput
             placeholder="Password"
+            placeholderTextColor="#999999"
             style={styles.textInput}
             secureTextEntry
             value={password}
@@ -112,7 +114,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
   },
   icon: { width: 20, height: 20, marginRight: 10 },
-  textInput: { flex: 1, fontFamily: "Poppins-Regular" },
+  textInput: { flex: 1, fontFamily: "Poppins-Regular", color: "#1a1a1a" },
   button: {
     backgroundColor: "#2254C5",
     height: 55,

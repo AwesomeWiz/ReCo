@@ -18,6 +18,7 @@ def signup():
     password = data["password"]
     country = data["country"]
     state = data["state"]
+    district = data.get("district", "")
 
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode("utf-8")
 
@@ -26,9 +27,9 @@ def signup():
 
     try:
         cur.execute("""
-            INSERT INTO shops(store_name, phone, password_hash, country, state)
-            VALUES (%s,%s,%s,%s,%s)
-        """, (store, phone, hashed, country, state))
+            INSERT INTO shops(store_name, phone, password_hash, country, state, district)
+            VALUES (%s,%s,%s,%s,%s,%s)
+        """, (store, phone, hashed, country, state, district))
 
         conn.commit()
         return jsonify({"message": "Signup success"})
