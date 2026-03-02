@@ -99,12 +99,6 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const locationParts = [state, country].filter(Boolean).join(", ");
-  const initials = storeName
-    .split(" ")
-    .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() || "")
-    .join("");
-
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
@@ -115,7 +109,7 @@ export default function ProfileScreen({ navigation }) {
         {/* ── Avatar + store name ─────────────────────────────────────────────── */}
         <View style={s.avatarCard}>
           <View style={s.avatar}>
-            <AppText font="bold" style={s.avatarText}>{initials || "S"}</AppText>
+            <Ionicons name="storefront" size={34} color={WHITE} />
           </View>
           <AppText font="bold" style={s.storeName}>{storeName}</AppText>
           {locationParts ? (
@@ -205,15 +199,14 @@ const s = StyleSheet.create({
     elevation: 3,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: ACCENT,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,
   },
-  avatarText: { fontSize: 26, color: WHITE },
   storeName: { fontSize: 20, color: TEXT, marginBottom: 6 },
   locationRow: { flexDirection: "row", alignItems: "center" },
   locationText: { fontSize: 13, color: MUTED },
