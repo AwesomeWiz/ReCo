@@ -9,6 +9,7 @@ CREATE TABLE shops (
     password_hash VARCHAR(255),
     country VARCHAR(100),
     state VARCHAR(100),
+    district VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -131,8 +132,8 @@ INSERT INTO inventory (shop_id, product_name, category, price, stock, barcode) V
 (1, 'Sugar', 'Groceries', 50,  15,  'BAR005');
 =======
 -- Insert shop (id=1)
-INSERT INTO shops (id, store_name, phone, password_hash, country, state) VALUES
-(1, 'Test Store', '9999999999', '$2b$12$T36YDUZ6Tdnu9GlcJU/KeOOgtB218HTCEO0OC7rmbQ1TMDR/0ROzK', 'India', 'Kerala');
+INSERT INTO shops (id, store_name, phone, password_hash, country, state, district) VALUES 
+(1, 'Test Store', '9999999999', '$2b$12$T36YDUZ6Tdnu9GlcJU/KeOOgtB218HTCEO0OC7rmbQ1TMDR/0ROzK', 'India', 'Kerala', 'Ernakulam');
 
 -- ═══════════════════════════════════════════════
 -- 25 transactions spanning Jan 10 – Feb 19, 2026
