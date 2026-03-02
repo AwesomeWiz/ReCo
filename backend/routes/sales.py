@@ -395,9 +395,10 @@ def forecast_sales(user_id):
 
         forecast_values = _arima_or_fallback(daily_series.values, steps=7)
 
-        last_date = daily_series.index[-1]
+        # Always anchor forecast from today so dates are never stale
+        today = datetime.date.today()
         future_dates = pd.date_range(
-            start=last_date + pd.Timedelta(days=1),
+            start=today + pd.Timedelta(days=1),
             periods=7
         )
 
@@ -442,12 +443,14 @@ def analytics_summary(user_id):
     cur = conn.cursor()
 
     try:
-        # ── Total sales & transactions ──────────────────────
+        # ── Total sales, transactions & items sold ──────────
         cur.execute(f"""
             SELECT
-                COALESCE(SUM(t.total), 0)  AS total_sales,
-                COUNT(t.id)                AS total_transactions
+                COALESCE(SUM(t.total), 0)    AS total_sales,
+                COUNT(DISTINCT t.id)         AS total_transactions,
+                COALESCE(SUM(s.quantity), 0) AS total_items
             FROM transactions t
+            LEFT JOIN sales s ON s.transaction_id = t.id AND s.shop_id = t.shop_id
             WHERE t.shop_id = %s
               AND t.status = 'completed'
               AND {pf_t}
@@ -488,8 +491,10 @@ def analytics_summary(user_id):
         """, (user_id, user_id))
         cats = cur.fetchall()
 
-        # ── Stock risk flag via ARIMA demand check ──────────
-        # Get inventory items
+        # ── Stock risk flag: HIGH or MEDIUM risk on any inventory item ──
+        # Uses same thresholds as /analytics/stockout-risk:
+        #   high   → stock <= demand_7d * 0.5
+        #   medium → stock <  demand_7d
         cur.execute("""
             SELECT product_name, stock
             FROM inventory
@@ -510,17 +515,18 @@ def analytics_summary(user_id):
             sales_rows = cur.fetchall()
 
             if sales_rows:
-                dates = [r["date"] for r in sales_rows]
+                dates  = [r["date"] for r in sales_rows]
                 values = [float(r["qty"]) for r in sales_rows]
-                daily = _fill_date_gaps(dates, values)
+                daily  = _fill_date_gaps(dates, values)
                 demand_7d = sum(_arima_or_fallback(daily.values, steps=7))
-                if item["stock"] <= demand_7d:
+                stock_val = float(item["stock"])
+                # Only flag AT RISK for high or medium — mirrors stockout-risk endpoint
+                if demand_7d > 0 and stock_val < demand_7d:
                     stock_risk = True
                     break
 
-        # If no inventory defined, compute simplified risk from sales velocity
+        # If no inventory defined, fall back to sales-velocity heuristic
         if not inv_items:
-            # Check if any product sold more than 50 units in period
             cur.execute(f"""
                 SELECT SUM(s.quantity) as total_qty
                 FROM sales s
@@ -535,6 +541,7 @@ def analytics_summary(user_id):
         return jsonify({
             "total_sales":        round(float(summary["total_sales"]), 2),
             "total_transactions": int(summary["total_transactions"]),
+            "total_items":        int(summary["total_items"]),
             "top_product":        top["product_name"] if top else "N/A",
             "stock_risk":         stock_risk,
             "categories":         cats,
@@ -559,14 +566,27 @@ def demand_forecast(user_id):
     cur = conn.cursor()
 
     try:
-        # Distinct products sold by this shop
+        # Use inventory as the source of products so every item gets a forecast
+        # (not just products that have been sold before)
         cur.execute("""
-            SELECT DISTINCT product_name
-            FROM sales
+            SELECT product_name
+            FROM inventory
             WHERE shop_id = %s
             ORDER BY product_name
         """, (user_id,))
-        products = [r["product_name"] for r in cur.fetchall()]
+        inv_rows = cur.fetchall()
+
+        # Fall back to distinct sold products if inventory is empty
+        if not inv_rows:
+            cur.execute("""
+                SELECT DISTINCT product_name
+                FROM sales
+                WHERE shop_id = %s
+                ORDER BY product_name
+            """, (user_id,))
+            inv_rows = cur.fetchall()
+
+        products = [r["product_name"] for r in inv_rows]
 
         result = []
         today = datetime.date.today()
@@ -586,9 +606,9 @@ def demand_forecast(user_id):
             rows = cur.fetchall()
 
             if rows:
-                dates = [r["date"] for r in rows]
+                dates  = [r["date"] for r in rows]
                 values = [float(r["qty"]) for r in rows]
-                daily = _fill_date_gaps(dates, values)
+                daily  = _fill_date_gaps(dates, values)
                 forecast = _arima_or_fallback(daily.values, steps=7)
             else:
                 forecast = [0.0] * 7
