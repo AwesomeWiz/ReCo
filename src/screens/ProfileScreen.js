@@ -49,6 +49,7 @@ export default function ProfileScreen({ navigation }) {
   const [storeName, setStoreName] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("");
+  const [district, setDistrict] = useState("");
   const [phone, setPhone] = useState("");
   const [totalItems, setTotalItems] = useState(null);
   const [totalSales, setTotalSales] = useState(null);
@@ -60,10 +61,12 @@ export default function ProfileScreen({ navigation }) {
         const name = await AsyncStorage.getItem("store_name");
         const stateV = await AsyncStorage.getItem("state");
         const countryV = await AsyncStorage.getItem("country");
+        const districtV = await AsyncStorage.getItem("district");
         const phoneV = await AsyncStorage.getItem("phone");
         setStoreName(name || "My Store");
         setState(stateV || "");
         setCountry(countryV || "");
+        setDistrict(districtV || "");
         setPhone(phoneV || "");
       })();
 
@@ -91,7 +94,7 @@ export default function ProfileScreen({ navigation }) {
         text: "Log out",
         style: "destructive",
         onPress: async () => {
-          await AsyncStorage.multiRemove(["token", "store_name", "state", "country", "phone"]);
+          await AsyncStorage.multiRemove(["token", "store_name", "state", "country", "district", "phone"]);
           navigation.replace("Login");
         },
       },
@@ -141,6 +144,8 @@ export default function ProfileScreen({ navigation }) {
         <AppText style={s.groupLabel}>Store Details</AppText>
         <View style={s.card}>
           <RowItem icon="storefront-outline" label="Store name" value={storeName} />
+          <View style={s.divider} />
+          <RowItem icon="location-outline" label="District" value={district || "—"} />
           <View style={s.divider} />
           <RowItem icon="location-outline" label="State" value={state || "—"} />
           <View style={s.divider} />

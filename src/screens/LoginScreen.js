@@ -31,6 +31,7 @@ export default function LoginScreen({ navigation }) {
       await AsyncStorage.setItem("store_name", res.data.store_name || "");
       await AsyncStorage.setItem("state", res.data.state || "");
       await AsyncStorage.setItem("country", res.data.country || "");
+      await AsyncStorage.setItem("district", res.data.district || "");
 
       const saved = await AsyncStorage.getItem("token");
       console.log("Saved token:", saved);
