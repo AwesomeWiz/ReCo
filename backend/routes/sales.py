@@ -61,6 +61,7 @@ def add_item_to_transaction(user_id):
         transaction_id = data["transaction_id"]
         product_name = data["product_name"]
         category = data.get("category", "")
+        barcode = data.get("barcode", None)
         price = data["price"]
         quantity = data["quantity"]
         total = data["total"]
@@ -81,6 +82,7 @@ def add_item_to_transaction(user_id):
         if not txn:
             return jsonify({"error": "Invalid or completed transaction"}), 400
 
+        # ── Insert sale record ──
         cur.execute("""
             INSERT INTO sales (
                 shop_id,
@@ -102,11 +104,27 @@ def add_item_to_transaction(user_id):
             transaction_id
         ))
 
+        # ── Update transaction total ──
         cur.execute("""
             UPDATE transactions
             SET total = total + %s
             WHERE id = %s AND shop_id = %s
         """, (total, transaction_id, user_id))
+
+        # ── Deduct from inventory stock ──
+        if barcode:
+            cur.execute("""
+                UPDATE inventory
+                SET stock = GREATEST(stock - %s, 0)
+                WHERE shop_id = %s AND barcode = %s
+            """, (quantity, user_id, barcode))
+        else:
+            cur.execute("""
+                UPDATE inventory
+                SET stock = GREATEST(stock - %s, 0)
+                WHERE shop_id = %s AND product_name = %s
+                LIMIT 1
+            """, (quantity, user_id, product_name))
 
         conn.commit()
 
@@ -133,7 +151,8 @@ def get_transaction(user_id, transaction_id):
 
     try:
         cur.execute("""
-            SELECT id FROM transactions
+            SELECT id, transaction_code, total, created_at
+            FROM transactions
             WHERE id = %s AND shop_id = %s
         """, (transaction_id, user_id))
 
@@ -153,13 +172,18 @@ def get_transaction(user_id, transaction_id):
             {
                 "description": row["product_name"],
                 "qty": row["quantity"],
-                "rate": row["price"],
-                "amount": row["total"]
+                "rate": float(row["price"]),
+                "amount": float(row["total"])
             }
             for row in rows
         ]
 
-        return jsonify({"items": items}), 200
+        return jsonify({
+            "transaction_code": txn["transaction_code"],
+            "total": float(txn["total"]),
+            "created_at": txn["created_at"].isoformat() if hasattr(txn["created_at"], "isoformat") else str(txn["created_at"]),
+            "items": items
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

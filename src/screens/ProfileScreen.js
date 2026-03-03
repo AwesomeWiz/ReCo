@@ -48,6 +48,7 @@ function RowItem({ icon, label, value, onPress, danger }) {
 export default function ProfileScreen({ navigation }) {
   const [storeName, setStoreName] = useState("");
   const [state, setState] = useState("");
+  const [district, setDistrict] = useState("");
   const [country, setCountry] = useState("");
   const [district, setDistrict] = useState("");
   const [phone, setPhone] = useState("");
@@ -60,11 +61,13 @@ export default function ProfileScreen({ navigation }) {
       (async () => {
         const name = await AsyncStorage.getItem("store_name");
         const stateV = await AsyncStorage.getItem("state");
+        const districtV = await AsyncStorage.getItem("district");
         const countryV = await AsyncStorage.getItem("country");
         const districtV = await AsyncStorage.getItem("district");
         const phoneV = await AsyncStorage.getItem("phone");
         setStoreName(name || "My Store");
         setState(stateV || "");
+        setDistrict(districtV || "");
         setCountry(countryV || "");
         setDistrict(districtV || "");
         setPhone(phoneV || "");
@@ -94,14 +97,14 @@ export default function ProfileScreen({ navigation }) {
         text: "Log out",
         style: "destructive",
         onPress: async () => {
-          await AsyncStorage.multiRemove(["token", "store_name", "state", "country", "district", "phone"]);
+          await AsyncStorage.multiRemove(["token", "store_name", "state", "district", "country", "phone"]);
           navigation.replace("Login");
         },
       },
     ]);
   };
 
-  const locationParts = [state, country].filter(Boolean).join(", ");
+  const locationParts = [district, state, country].filter(Boolean).join(", ");
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
@@ -145,7 +148,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={s.card}>
           <RowItem icon="storefront-outline" label="Store name" value={storeName} />
           <View style={s.divider} />
-          <RowItem icon="location-outline" label="District" value={district || "—"} />
+          <RowItem icon="map-outline" label="District" value={district || "—"} />
           <View style={s.divider} />
           <RowItem icon="location-outline" label="State" value={state || "—"} />
           <View style={s.divider} />
