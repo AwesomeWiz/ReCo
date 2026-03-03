@@ -54,6 +54,7 @@ export default function BarcodeScannerScreen({ navigation, route }) {
     try {
       // 🔹 INVENTORY MODE — pass barcode back to Inventory tab
       if (route?.params?.mode === "inventory") {
+        setTorchOn(false);
         navigation.navigate("Main", {
           screen: "Inventory",
           params: { scannedBarcode: data },
@@ -67,6 +68,7 @@ export default function BarcodeScannerScreen({ navigation, route }) {
       });
 
       if (res.data.found) {
+        setTorchOn(false);
         navigation.replace("ConfirmProduct", {
           prediction: {
             productName: res.data.product.name,
@@ -106,7 +108,10 @@ export default function BarcodeScannerScreen({ navigation, route }) {
       {/* Close button */}
       <TouchableOpacity
         style={styles.closeBtn}
-        onPress={() => navigation.goBack()}
+        onPress={() => {
+          setTorchOn(false);
+          navigation.goBack();
+        }}
       >
         <AppText style={{ color: "#fff" }}>✕ Close</AppText>
       </TouchableOpacity>

@@ -17,15 +17,15 @@ const ACCENT = "#2254C5";
 export default function ConfirmProductScreen({ route, navigation }) {
   const { prediction } = route.params;
 
-  const price = 20;
+  const price = prediction.price ?? 0;
   const [quantity, setQuantity] = useState(1);
   const {
-  transactionId,
-  setTransactionId,
-  cartItems,
-  setCartItems,
-  clearCart
-} = useContext(CartContext);
+    transactionId,
+    setTransactionId,
+    cartItems,
+    setCartItems,
+    clearCart
+  } = useContext(CartContext);
 
   const totalItem = price * quantity;
 
@@ -52,6 +52,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
         transaction_id: activeId,
         product_name: prediction.productName,
         category: prediction.category || "",
+        barcode: prediction.barcode || null,
         price,
         quantity,
         total: totalItem
@@ -82,8 +83,8 @@ export default function ConfirmProductScreen({ route, navigation }) {
   };
 
   const handleContinueScan = () => {
-  navigation.navigate("Scan");
-};
+    navigation.navigate("Scan");
+  };
 
 
 

@@ -274,6 +274,12 @@ export default function InventoryScreen({ navigation, route }) {
                   {item.category}
                 </AppText>
 
+                {item.barcode ? (
+                  <AppText style={s.barcode}>
+                    📦 {item.barcode}
+                  </AppText>
+                ) : null}
+
                 <AppText style={s.price}>
                   ₹{Number(item.price).toFixed(2)}
                 </AppText>
@@ -418,6 +424,8 @@ const s = StyleSheet.create({
   price: { marginTop: 6, fontWeight: "600" },
 
   category: { fontSize: 12, color: "#666", marginTop: 2 },
+
+  barcode: { fontSize: 11, color: "#999", marginTop: 2 },
 
   stock: { fontSize: 14, fontWeight: "600" },
 
