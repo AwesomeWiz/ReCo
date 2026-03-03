@@ -7,6 +7,7 @@ import api from "../api/api";
 export default function BarcodeScannerScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   // ✅ Hooks MUST be before any conditional returns
   useEffect(() => {
@@ -51,10 +52,12 @@ export default function BarcodeScannerScreen({ navigation, route }) {
     setIsScanning(true);
 
     try {
-      // 🔹 INVENTORY MODE
+      // 🔹 INVENTORY MODE — pass barcode back to Inventory tab
       if (route?.params?.mode === "inventory") {
-        route.params.onScan(data);
-        navigation.goBack();
+        navigation.navigate("Main", {
+          screen: "Inventory",
+          params: { scannedBarcode: data },
+        });
         return;
       }
 
@@ -97,13 +100,26 @@ export default function BarcodeScannerScreen({ navigation, route }) {
           barcodeTypes: ["ean13", "ean8", "code128", "upc_a", "upc_e"],
         }}
         onBarcodeScanned={handleScan}
+        enableTorch={torchOn}
       />
 
+      {/* Close button */}
       <TouchableOpacity
         style={styles.closeBtn}
         onPress={() => navigation.goBack()}
       >
-        <AppText style={{ color: "#fff" }}>Close</AppText>
+        <AppText style={{ color: "#fff" }}>✕ Close</AppText>
+      </TouchableOpacity>
+
+      {/* Flashlight toggle */}
+      <TouchableOpacity
+        style={[styles.torchBtn, torchOn && styles.torchBtnOn]}
+        onPress={() => setTorchOn((prev) => !prev)}
+      >
+        <AppText style={styles.torchIcon}>{torchOn ? "🔦" : "🔦"}</AppText>
+        <AppText style={styles.torchLabel}>
+          {torchOn ? "Flash ON" : "Flash OFF"}
+        </AppText>
       </TouchableOpacity>
     </View>
   );
@@ -112,13 +128,47 @@ export default function BarcodeScannerScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   camera: { flex: 1 },
+
   closeBtn: {
     position: "absolute",
     top: 60,
     right: 20,
     backgroundColor: "rgba(0,0,0,0.6)",
-    padding: 10,
-    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
   },
+
+  torchBtn: {
+    position: "absolute",
+    bottom: 50,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.65)",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.3)",
+    gap: 8,
+  },
+
+  torchBtnOn: {
+    backgroundColor: "rgba(255,220,0,0.25)",
+    borderColor: "#FFD700",
+  },
+
+  torchIcon: {
+    fontSize: 20,
+  },
+
+  torchLabel: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 15,
+    letterSpacing: 0.5,
+  },
+
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

@@ -18,7 +18,7 @@ const WHITE = "#FFFFFF";
 const ACCENT = "#3A6FF7";
 const DANGER = "#E53935";
 
-export default function InventoryScreen({ navigation }) {
+export default function InventoryScreen({ navigation, route }) {
   const [inventory, setInventory] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
 
@@ -55,6 +55,30 @@ export default function InventoryScreen({ navigation }) {
     }, [])
   );
 
+  // When returning from BarcodeScanner, process the scanned barcode
+  useEffect(() => {
+    const code = route.params?.scannedBarcode;
+    if (!code) return;
+    navigation.setParams({ scannedBarcode: undefined });
+    setBarcode(code);
+    setShowAdd(true); // Re-open the form in case it collapsed on navigation
+    // Auto-fill from existing product if barcode matches
+    api.post("/inventory/barcode-lookup", { barcode: code })
+      .then((res) => {
+        if (res.data.found) {
+          const p = res.data.product;
+          setProductName(p.name);
+          setSearchQuery(p.name);
+          setPrice(String(p.price));
+          setCategory(p.category || "");
+          // Stock is intentionally left blank so user can enter the new quantity to add
+        }
+      })
+      .catch(() => {
+        // Not found or failed — user fills manually, barcode is still set
+      });
+  }, [route.params?.scannedBarcode]);
+
   const handleAddProduct = async () => {
     if (!category) {
       Alert.alert("Please select a category");
@@ -70,6 +94,14 @@ export default function InventoryScreen({ navigation }) {
         stock: Number(stock),
       });
 
+      const wasMerged = res.data?.merged;
+      Alert.alert(
+        wasMerged ? "Stock Updated" : "Product Added",
+        wasMerged
+          ? `Stock added to existing product.`
+          : `New product saved to inventory.`
+      );
+
       fetchInventory();
 
       setProductName("");
@@ -81,8 +113,9 @@ export default function InventoryScreen({ navigation }) {
       setShowAdd(false);
 
     } catch (err) {
-      console.log("ERROR:", err.response?.data || err.message);
-      Alert.alert("Failed to save product");
+      const errMsg = err.response?.data?.error || err.message || "Unknown error";
+      console.log("ERROR:", errMsg);
+      Alert.alert("Failed to save product", errMsg);
     }
   };
 
@@ -121,9 +154,9 @@ export default function InventoryScreen({ navigation }) {
         {/* ADD FORM */}
         {showAdd && (
           <View style={s.formCard}>
-          <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
-            Product Name
-          </AppText>
+            <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+              Product Name
+            </AppText>
             <TextInput
               placeholder="Search or Enter Product Name"
               style={s.input}
@@ -153,10 +186,7 @@ export default function InventoryScreen({ navigation }) {
             <TouchableOpacity
               style={s.scanBarcodeBtn}
               onPress={() =>
-                navigation.navigate("BarcodeScanner", {
-                  mode: "inventory",
-                  onScan: (code) => setBarcode(code),
-                })
+                navigation.navigate("BarcodeScanner", { mode: "inventory" })
               }
             >
               <AppText style={s.scanBarcodeText}>
@@ -209,8 +239,8 @@ export default function InventoryScreen({ navigation }) {
               onChangeText={setPrice}
             />
             <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
-  Stock
-</AppText>
+              Stock
+            </AppText>
             <TextInput
               placeholder="Stock"
               keyboardType="numeric"

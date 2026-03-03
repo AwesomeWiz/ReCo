@@ -32,7 +32,7 @@ def get_inventory(user_id):
 
 
 # ─────────────────────────────────────────────
-# ADD PRODUCT TO INVENTORY
+# ADD PRODUCT TO INVENTORY (upsert by barcode)
 # ─────────────────────────────────────────────
 @inventory_bp.route("/inventory/add", methods=["POST"])
 @token_required
@@ -45,7 +45,7 @@ def add_inventory_item(user_id):
     try:
         product_name = data.get("name")
         category = data.get("category", "")
-        barcode = data.get("barcode", None)  # ✅ Get barcode
+        barcode = data.get("barcode", None)
 
         if "price" not in data:
             return jsonify({"error": "Missing field: price"}), 400
@@ -55,21 +55,30 @@ def add_inventory_item(user_id):
         price = data["price"]
         stock = data["stock"]
 
-        cur.execute("""
-            INSERT INTO inventory (
-                shop_id,
-                product_name,
-                category,
-                price,
-                stock,
-                barcode
-            )
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (user_id, product_name, category, price, stock, barcode))
+        if barcode:
+            # ── Atomic upsert: if barcode already exists, ADD the new stock ──
+            cur.execute("""
+                INSERT INTO inventory (shop_id, product_name, category, price, stock, barcode)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    stock = stock + VALUES(stock),
+                    price = VALUES(price)
+            """, (user_id, product_name, category, price, stock, barcode))
+
+            # affected_rows = 1 → inserted new, 2 → updated existing
+            merged = cur.rowcount == 2
+        else:
+            # No barcode → always insert a new row
+            cur.execute("""
+                INSERT INTO inventory (shop_id, product_name, category, price, stock, barcode)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (user_id, product_name, category, price, stock, barcode))
+            merged = False
 
         conn.commit()
 
-        return jsonify({"message": "Product added to inventory"}), 201
+        msg = "Stock updated (product merged)" if merged else "Product added to inventory"
+        return jsonify({"message": msg, "merged": merged}), 200
 
     except Exception as e:
         conn.rollback()
