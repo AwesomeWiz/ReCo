@@ -151,7 +151,8 @@ def get_transaction(user_id, transaction_id):
 
     try:
         cur.execute("""
-            SELECT id FROM transactions
+            SELECT id, transaction_code, total, created_at
+            FROM transactions
             WHERE id = %s AND shop_id = %s
         """, (transaction_id, user_id))
 
@@ -171,13 +172,18 @@ def get_transaction(user_id, transaction_id):
             {
                 "description": row["product_name"],
                 "qty": row["quantity"],
-                "rate": row["price"],
-                "amount": row["total"]
+                "rate": float(row["price"]),
+                "amount": float(row["total"])
             }
             for row in rows
         ]
 
-        return jsonify({"items": items}), 200
+        return jsonify({
+            "transaction_code": txn["transaction_code"],
+            "total": float(txn["total"]),
+            "created_at": txn["created_at"].isoformat() if hasattr(txn["created_at"], "isoformat") else str(txn["created_at"]),
+            "items": items
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

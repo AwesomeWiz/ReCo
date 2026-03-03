@@ -68,6 +68,7 @@ def login():
             "store_name": user["store_name"] or "",
             "state": user["state"] or "",
             "country": user["country"] or "",
+            "district": user["district"] or "",
         })
 
     return jsonify({"message": "Wrong password"}), 401

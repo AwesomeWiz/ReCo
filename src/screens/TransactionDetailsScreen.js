@@ -10,6 +10,7 @@ import AppText from "../components/AppText";
 import api from "../api/api";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -19,10 +20,23 @@ export default function TransactionDetailsScreen({ route }) {
   const { transactionId } = route.params;
 
   const [transaction, setTransaction] = useState(null);
+  const [storeName, setStoreName] = useState("My Store");
+  const [storeState, setStoreState] = useState("");
+  const [storeDistrict, setStoreDistrict] = useState("");
 
   useEffect(() => {
     fetchTransaction();
+    loadStoreInfo();
   }, []);
+
+  const loadStoreInfo = async () => {
+    const name = await AsyncStorage.getItem("store_name");
+    const state = await AsyncStorage.getItem("state");
+    const district = await AsyncStorage.getItem("district");
+    if (name) setStoreName(name);
+    if (state) setStoreState(state);
+    if (district) setStoreDistrict(district);
+  };
 
   const fetchTransaction = async () => {
     try {
@@ -35,13 +49,20 @@ export default function TransactionDetailsScreen({ route }) {
 
   if (!transaction) return null;
 
-  const displayDate = new Date(
-    transaction.created_at
-  ).toLocaleDateString("en-GB");
+  const dateObj = new Date(transaction.created_at);
+  const displayDate = isNaN(dateObj)
+    ? "—"
+    : dateObj.toLocaleDateString("en-GB");
+  const displayTime = isNaN(dateObj)
+    ? "—"
+    : dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const displayTime = new Date(
-    transaction.created_at
-  ).toLocaleTimeString();
+  // Total: use backend value if available, otherwise sum from items (fallback for old Flask)
+  const itemsTotal = (transaction.items || []).reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+  const total = Number(transaction.total) > 0 ? Number(transaction.total) : itemsTotal;
 
   const generatePDF = async () => {
     const rows = transaction.items
@@ -49,28 +70,35 @@ export default function TransactionDetailsScreen({ route }) {
         (item) => `
         <tr>
           <td>${item.description}</td>
-          <td>${item.qty}</td>
-          <td>${item.rate}</td>
-          <td>${item.amount}</td>
+          <td style="text-align:right">${Number(item.qty).toFixed(2)}</td>
+          <td style="text-align:right">₹${Number(item.rate).toFixed(2)}</td>
+          <td style="text-align:right">₹${Number(item.amount).toFixed(2)}</td>
         </tr>`
       )
       .join("");
 
     const html = `
       <html>
-        <body style="font-family: Arial; padding: 20px;">
-          <h2>SR BAKERY</h2>
-          <p>${displayDate} ${displayTime}</p>
-          <table width="100%" border="1" cellspacing="0" cellpadding="6">
-            <tr>
-              <th>Description</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>Amount</th>
+        <body style="font-family: Arial; padding: 24px;">
+          <h2 style="text-align:center; letter-spacing:3px">${storeName.toUpperCase()}</h2>
+          <p style="text-align:center; color:#666">${storeDistrict ? storeDistrict + ", " : ""}${storeState.toUpperCase()}</p>
+          <hr/>
+          <h3 style="text-align:center">RECEIPT</h3>
+          <hr/>
+          <p style="text-align:right; font-size:12px">${displayDate} ${displayTime}</p>
+          <p style="text-align:right; font-size:12px">${transaction.transaction_code || ""}</p>
+          <table width="100%" border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse">
+            <tr style="background:#eee">
+              <th style="text-align:left">Description</th>
+              <th style="text-align:right">Qty</th>
+              <th style="text-align:right">Rate</th>
+              <th style="text-align:right">Amount</th>
             </tr>
             ${rows}
           </table>
-          <h3>Total: ₹${Number(transaction.total).toFixed(2)}</h3>
+          <p style="text-align:right; font-size:16px; font-weight:bold; margin-top:16px">
+            TOTAL: ₹${total.toFixed(2)}
+          </p>
         </body>
       </html>
     `;
@@ -103,18 +131,24 @@ export default function TransactionDetailsScreen({ route }) {
     <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.content}>
         <TouchableOpacity style={s.downloadBtn} onPress={generatePDF}>
-          <AppText style={s.downloadText}>Download PDF</AppText>
+          <AppText style={s.downloadText}>⬇ Download PDF</AppText>
         </TouchableOpacity>
 
         <View style={s.receipt}>
           <ZigzagEdge />
 
           <View style={s.receiptBody}>
+            {/* Store name from AsyncStorage */}
             <AppText font="billbold" style={s.shopName}>
-              SR BAKERY
+              {storeName.toUpperCase()}
             </AppText>
+            {storeDistrict ? (
+              <AppText font="billsemi" style={s.shopCity}>
+                {storeDistrict.toUpperCase()}
+              </AppText>
+            ) : null}
             <AppText font="billsemi" style={s.shopCity}>
-              KOCHI, KERALA
+              {storeState.toUpperCase()}
             </AppText>
 
             <DottedLine />
@@ -123,14 +157,17 @@ export default function TransactionDetailsScreen({ route }) {
             </AppText>
             <DottedLine />
 
+            {/* Date and time */}
             <AppText font="billsemi" style={s.date}>
-              {displayDate} {displayTime}
+              {displayDate}{"  "}{displayTime}
             </AppText>
 
+            {/* Transaction code */}
             <AppText font="billsemi" style={s.txn}>
               {transaction.transaction_code}
             </AppText>
 
+            {/* Items header */}
             <View style={s.row}>
               <AppText font="billbold" style={[s.cell, s.colDesc]}>
                 DESCRIPTION
@@ -168,7 +205,7 @@ export default function TransactionDetailsScreen({ route }) {
             <DottedLine />
 
             <AppText font="billbold" style={s.total}>
-              TOTAL: ₹{Number(transaction.total).toFixed(2)}
+              TOTAL: ₹{total.toFixed(2)}
             </AppText>
           </View>
 
