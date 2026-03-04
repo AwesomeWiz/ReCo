@@ -1,117 +1,103 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+} from "react-native";
+import {
+  Camera,
+  useCameraDevice,
+  useCameraPermission,
+  useFrameProcessor,
+} from "react-native-vision-camera";
+import { useResizePlugin } from "vision-camera-resize-plugin";
 import { useTensorflowModel } from "react-native-fast-tflite";
+import { useRunOnJS } from "react-native-worklets-core";
 import AppText from "../components/AppText";
-import { classifyOutput } from "../utils/classifyProduct";
+import classNames from "../data/class_names.json";
 
-// Model input dimensions (MobileNet-style 224×224 RGB)
+// Model input dimensions (224×224 RGB)
 const INPUT_SIZE = 224;
-// How often to run inference (ms)
-const INFERENCE_INTERVAL = 800;
+const NUM_CLASSES = classNames.length; // 50
 
 export default function ScanScreen({ navigation, route }) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [barcodeMode, setBarcodeMode] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [prediction, setPrediction] = useState(null);
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const device = useCameraDevice("back");
 
-  const cameraRef = useRef(null);
-  const inferenceActive = useRef(false);
-  const intervalRef = useRef(null);
+  const [prediction, setPrediction] = useState(null);
 
   // Load the TFLite model from assets
   const model = useTensorflowModel(
-    require("../../assets/models/retail_classifier_quantized.tflite")
+    require("../../assets/models/fmcg_classifier.tflite")
   );
-
   const isModelReady = model.state === "loaded";
 
-  // ─── Inference Loop ───────────────────────────────────────────────────────
-  const runInference = useCallback(async () => {
-    if (!isModelReady || !cameraRef.current || inferenceActive.current) return;
+  // Resize plugin for frame processor
+  const { resize } = useResizePlugin();
 
-    inferenceActive.current = true;
-    try {
-      // 1. Capture a frame from the camera
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.3,       // low quality is fine — we resize anyway
-        skipProcessing: true,
-        exif: false,
+  // Request camera permission on mount
+  useEffect(() => {
+    if (!hasPermission) {
+      requestPermission();
+    }
+  }, [hasPermission, requestPermission]);
+
+  // ─── Bridge: worklet → JS thread ──────────────────────────────────────────
+  const updatePrediction = useRunOnJS(
+    (name, conf) => {
+      setPrediction({ productName: name, confidence: conf });
+    },
+    []
+  );
+
+  // ─── Frame Processor ──────────────────────────────────────────────────────
+  const frameProcessor = useFrameProcessor(
+    (frame) => {
+      "worklet";
+      if (model.state !== "loaded" || !model.model) return;
+
+      // 1. Resize frame to 224×224 RGB uint8
+      const resized = resize(frame, {
+        scale: { width: INPUT_SIZE, height: INPUT_SIZE },
+        pixelFormat: "rgb",
+        dataType: "uint8",
       });
 
-      // 2. Resize to model input size
-      const resized = await manipulateAsync(
-        photo.uri,
-        [{ resize: { width: INPUT_SIZE, height: INPUT_SIZE } }],
-        { base64: true, format: SaveFormat.JPEG }
-      );
+      // 2. Run model synchronously on the worklet thread
+      const outputs = model.model.runSync([resized]);
+      const output = outputs[0];
 
-      // 3. Decode base64 → Uint8Array of RGB pixels
-      const base64Data = resized.base64;
-      const binaryStr = atob(base64Data);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
+      // 3. Find argmax (highest confidence class)
+      let maxIdx = 0;
+      let maxVal = output[0];
+      for (let i = 1; i < output.length; i++) {
+        if (output[i] > maxVal) {
+          maxVal = output[i];
+          maxIdx = i;
+        }
       }
 
-      // 4. Build Uint8Array input tensor for quantized model
-      //    Quantized models expect uint8 values (0-255), shape [1, 224, 224, 3]
-      const pixelCount = INPUT_SIZE * INPUT_SIZE * 3;
-      const inputTensor = new Uint8Array(pixelCount);
-
-      // Use the last pixelCount bytes of the JPEG as pixel approximation
-      const startOffset = Math.max(0, bytes.length - pixelCount);
-      for (let i = 0; i < pixelCount; i++) {
-        inputTensor[i] = bytes[startOffset + i] ?? 0;
+      // 4. Apply softmax to get proper confidence
+      let maxRaw = output[0];
+      for (let i = 1; i < output.length; i++) {
+        if (output[i] > maxRaw) maxRaw = output[i];
       }
+      let sumExp = 0;
+      for (let i = 0; i < output.length; i++) {
+        sumExp += Math.exp(output[i] - maxRaw);
+      }
+      const confidence = Math.exp(output[maxIdx] - maxRaw) / sumExp;
 
-      // 5. Run model
-      const outputs = await model.model.run([inputTensor]);
+      // 5. Look up class name and send to JS thread
+      const name = classNames[maxIdx] || "Unknown";
+      updatePrediction(name, confidence);
+    },
+    [model, resize, updatePrediction]
+  );
 
-      // 6. Classify output
-      const result = classifyOutput(outputs[0]);
-      setPrediction(result);
-
-    } catch (err) {
-      // Silently ignore individual frame errors (camera not ready yet, etc.)
-      console.log("[Inference] frame error:", err.message);
-    } finally {
-      inferenceActive.current = false;
-    }
-  }, [isModelReady, model]);
-
-  // Start/stop the inference loop when model becomes ready
-  useEffect(() => {
-    if (!isModelReady) return;
-
-    intervalRef.current = setInterval(runInference, INFERENCE_INTERVAL);
-
-    return () => {
-      clearInterval(intervalRef.current);
-      inferenceActive.current = false;
-    };
-  }, [isModelReady, runInference]);
-
-  // ─── Barcode handler ──────────────────────────────────────────────────────
-  const handleBarcodeScanned = ({ data }) => {
-    if (isScanning) return;
-    setIsScanning(true);
-    setBarcodeMode(false);
-
-    if (route?.params?.mode === "inventory") {
-      route.params.onScan(data);
-      navigation.goBack();
-      return;
-    }
-
-    navigation.navigate("ConfirmProduct", { barcode: data });
-    setTimeout(() => setIsScanning(false), 1000);
-  };
-
-  // ─── Confirm current ML prediction ───────────────────────────────────────
+  // ─── Confirm current ML prediction ────────────────────────────────────────
   const handleConfirm = () => {
     if (!prediction) return;
     navigation.navigate("ConfirmProduct", {
@@ -124,9 +110,7 @@ export default function ScanScreen({ navigation, route }) {
   };
 
   // ─── Permission gates ─────────────────────────────────────────────────────
-  if (!permission) return <View />;
-
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <View style={styles.center}>
         <AppText>Camera permission required</AppText>
@@ -137,22 +121,31 @@ export default function ScanScreen({ navigation, route }) {
     );
   }
 
+  if (!device) {
+    return (
+      <View style={styles.center}>
+        <AppText>No camera device found</AppText>
+      </View>
+    );
+  }
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   const confidencePct = prediction
     ? `${Math.round(prediction.confidence * 100)}%`
     : null;
 
+  const isDetected = !!prediction;
+  const cornerColor = isDetected ? "#2EFF00" : "#FFFFFF";
+
   return (
     <View style={styles.container}>
-
       {/* Camera */}
-      <CameraView
-        ref={cameraRef}
+      <Camera
         style={styles.camera}
-        barcodeScannerSettings={{
-          barcodeTypes: ["ean13", "ean8", "code128", "upc_a", "upc_e"],
-        }}
-        onBarcodeScanned={barcodeMode ? handleBarcodeScanned : undefined}
+        device={device}
+        isActive={true}
+        frameProcessor={isModelReady ? frameProcessor : undefined}
+        pixelFormat="yuv"
       />
 
       {/* Close button */}
@@ -163,12 +156,32 @@ export default function ScanScreen({ navigation, route }) {
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
-      {/* Scanner Frame */}
+      {/* Scanner Frame — turns green when product detected */}
       <View style={styles.scannerFrame}>
-        <View style={[styles.corner, styles.topLeft]} />
-        <View style={[styles.corner, styles.topRight]} />
-        <View style={[styles.corner, styles.bottomLeft]} />
-        <View style={[styles.corner, styles.bottomRight]} />
+        <View
+          style={[styles.corner, styles.topLeft, { borderColor: cornerColor }]}
+        />
+        <View
+          style={[
+            styles.corner,
+            styles.topRight,
+            { borderColor: cornerColor },
+          ]}
+        />
+        <View
+          style={[
+            styles.corner,
+            styles.bottomLeft,
+            { borderColor: cornerColor },
+          ]}
+        />
+        <View
+          style={[
+            styles.corner,
+            styles.bottomRight,
+            { borderColor: cornerColor },
+          ]}
+        />
       </View>
 
       {/* Barcode Toggle */}
@@ -183,7 +196,6 @@ export default function ScanScreen({ navigation, route }) {
 
       {/* Bottom Sheet */}
       <View style={styles.bottomSheet}>
-
         {/* Model loading state */}
         {!isModelReady ? (
           <View style={styles.loadingRow}>
@@ -267,11 +279,25 @@ const styles = StyleSheet.create({
     height: "45%",
   },
 
-  corner: { width: 24, height: 24, borderColor: "#2EFF00", position: "absolute" },
+  corner: {
+    width: 24,
+    height: 24,
+    position: "absolute",
+  },
   topLeft: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
   topRight: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 },
-  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 },
-  bottomRight: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+  },
 
   bottomSheet: {
     backgroundColor: "#F9F6EE",
@@ -293,7 +319,12 @@ const styles = StyleSheet.create({
 
   detected: { textAlign: "center", color: "#808080", marginBottom: 4 },
   product: { fontSize: 18, textAlign: "center", marginBottom: 2 },
-  confidence: { textAlign: "center", color: "#2254C5", marginBottom: 14, fontSize: 13 },
+  confidence: {
+    textAlign: "center",
+    color: "#2254C5",
+    marginBottom: 14,
+    fontSize: 13,
+  },
 
   scanBtn: {
     alignSelf: "center",
