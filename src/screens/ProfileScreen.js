@@ -48,7 +48,6 @@ function RowItem({ icon, label, value, onPress, danger }) {
 export default function ProfileScreen({ navigation }) {
   const [storeName, setStoreName] = useState("");
   const [state, setState] = useState("");
-  const [district, setDistrict] = useState("");
   const [country, setCountry] = useState("");
   const [district, setDistrict] = useState("");
   const [phone, setPhone] = useState("");
@@ -61,7 +60,6 @@ export default function ProfileScreen({ navigation }) {
       (async () => {
         const name = await AsyncStorage.getItem("store_name");
         const stateV = await AsyncStorage.getItem("state");
-        const districtV = await AsyncStorage.getItem("district");
         const countryV = await AsyncStorage.getItem("country");
         const districtV = await AsyncStorage.getItem("district");
         const phoneV = await AsyncStorage.getItem("phone");
