@@ -30,7 +30,7 @@ export default function ScanScreen({ navigation, route }) {
 
   // Load the TFLite model from assets
   const model = useTensorflowModel(
-    require("../../assets/models/fmcg_classifier.tflite")
+    require("../../assets/models/fmcg_classifier.tflite")//new cahnge
   );
   const isModelReady = model.state === "loaded";
 
