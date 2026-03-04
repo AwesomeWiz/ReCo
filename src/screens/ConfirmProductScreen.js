@@ -1,11 +1,13 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Image,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import AppText from "../components/AppText";
 import api from "../api/api";
@@ -15,9 +17,11 @@ const BG = "#F9F6EE";
 const ACCENT = "#2254C5";
 
 export default function ConfirmProductScreen({ route, navigation }) {
-  const { prediction } = route.params;
+  const routePrediction = route.params?.prediction || {};
+  const routeBarcode = route.params?.barcode || null;
 
-  const price = prediction.price ?? 0;
+  const [product, setProduct] = useState(routePrediction);
+  const [loading, setLoading] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const {
     transactionId,
@@ -27,8 +31,50 @@ export default function ConfirmProductScreen({ route, navigation }) {
     clearCart
   } = useContext(CartContext);
 
+  const price = product.price ?? 0;
+  const stock = product.stock ?? null; // null = unknown (ML), number = from inventory
+  const isOutOfStock = stock !== null && stock <= 0;
   const totalItem = price * quantity;
 
+  // ─── Barcode Lookup on mount ──────────────────────────────────────────────
+  useEffect(() => {
+    if (routeBarcode && !routePrediction.productName) {
+      lookupBarcode(routeBarcode);
+    }
+  }, [routeBarcode]);
+
+  const lookupBarcode = async (barcode) => {
+    setLoading(true);
+    try {
+      const res = await api.post("/inventory/barcode-lookup", { barcode });
+
+      if (res.data.found) {
+        setProduct({
+          productName: res.data.product.name,
+          category: res.data.product.category,
+          price: res.data.product.price,
+          stock: res.data.product.stock,
+          barcode: res.data.product.barcode,
+          confidence: 1.0,
+        });
+      } else {
+        Alert.alert(
+          "Product Not Found",
+          res.data.message || "No product with this barcode exists in your inventory.",
+          [{ text: "OK", onPress: () => navigation.goBack() }]
+        );
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || err.message;
+      Alert.alert("Lookup Failed", errorMsg, [
+        { text: "OK", onPress: () => navigation.goBack() }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Cart helpers ─────────────────────────────────────────────────────────
   const fetchCart = async (id) => {
     try {
       const res = await api.get(`/transactions/${id}`);
@@ -39,6 +85,16 @@ export default function ConfirmProductScreen({ route, navigation }) {
   };
 
   const handleAddItem = async () => {
+    if (isOutOfStock) {
+      Alert.alert("Out of Stock", "This product is currently out of stock.");
+      return;
+    }
+
+    if (stock !== null && quantity > stock) {
+      Alert.alert("Insufficient Stock", `Only ${stock} items available.`);
+      return;
+    }
+
     try {
       let activeId = transactionId;
 
@@ -50,9 +106,9 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
       await api.post("/transactions/add-item", {
         transaction_id: activeId,
-        product_name: prediction.productName,
-        category: prediction.category || "",
-        barcode: prediction.barcode || null,
+        product_name: product.productName,
+        category: product.category || "",
+        barcode: product.barcode || null,
         price,
         quantity,
         total: totalItem
@@ -86,12 +142,20 @@ export default function ConfirmProductScreen({ route, navigation }) {
     navigation.navigate("Scan");
   };
 
-
-
   const cartTotal = cartItems.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0
   );
+
+  // ─── Loading State ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={ACCENT} />
+        <AppText style={{ marginTop: 16, color: "#808080" }}>Looking up barcode…</AppText>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -111,45 +175,67 @@ export default function ConfirmProductScreen({ route, navigation }) {
         {/* Current Product */}
         <View style={styles.card}>
           <AppText style={styles.label}>
-            Product: <AppText font="bold">{prediction.productName}</AppText>
+            Product: <AppText font="bold">{product.productName || "Unknown"}</AppText>
           </AppText>
 
           <AppText style={styles.label}>
             Price: <AppText font="bold">₹{price}</AppText>
           </AppText>
 
-          <View style={styles.qtyRow}>
-            <TouchableOpacity
-              onPress={() => quantity > 1 && setQuantity(quantity - 1)}
-              style={styles.qtyBtn}
-            >
-              <AppText>-</AppText>
-            </TouchableOpacity>
-
-            <AppText style={styles.qtyText}>{quantity}</AppText>
-
-            <TouchableOpacity
-              onPress={() => setQuantity(quantity + 1)}
-              style={styles.qtyBtn}
-            >
-              <AppText>+</AppText>
-            </TouchableOpacity>
-          </View>
-
-          <AppText style={styles.totalItem}>
-            Item Total: ₹{totalItem}
-          </AppText>
-
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={handleAddItem}
-          >
-            <AppText style={styles.btnText}>
-              Add to Cart
+          {stock !== null && (
+            <AppText style={[styles.label, isOutOfStock && { color: "#E53935" }]}>
+              Stock: <AppText font="bold">{isOutOfStock ? "Out of Stock" : stock}</AppText>
             </AppText>
-          </TouchableOpacity>
+          )}
 
-          {/* NEW Continue Scan Button */}
+          {isOutOfStock ? (
+            <View style={styles.outOfStockBanner}>
+              <AppText style={styles.outOfStockText}>
+                ⚠ This product is out of stock and cannot be added to the cart.
+              </AppText>
+            </View>
+          ) : (
+            <>
+              <View style={styles.qtyRow}>
+                <TouchableOpacity
+                  onPress={() => quantity > 1 && setQuantity(quantity - 1)}
+                  style={styles.qtyBtn}
+                >
+                  <AppText>-</AppText>
+                </TouchableOpacity>
+
+                <AppText style={styles.qtyText}>{quantity}</AppText>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (stock !== null && quantity >= stock) {
+                      Alert.alert("Max Stock", `Only ${stock} items available.`);
+                    } else {
+                      setQuantity(quantity + 1);
+                    }
+                  }}
+                  style={styles.qtyBtn}
+                >
+                  <AppText>+</AppText>
+                </TouchableOpacity>
+              </View>
+
+              <AppText style={styles.totalItem}>
+                Item Total: ₹{totalItem}
+              </AppText>
+
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={handleAddItem}
+              >
+                <AppText style={styles.btnText}>
+                  Add to Cart
+                </AppText>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Continue Scan Button */}
           <TouchableOpacity
             style={styles.scanBtn}
             onPress={handleContinueScan}
@@ -218,6 +304,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     marginBottom: 6
+  },
+  outOfStockBanner: {
+    backgroundColor: "#FFEBEE",
+    padding: 12,
+    borderRadius: 10,
+    marginVertical: 10,
+  },
+  outOfStockText: {
+    color: "#C62828",
+    textAlign: "center",
+    fontWeight: "600"
   },
   qtyRow: {
     flexDirection: "row",

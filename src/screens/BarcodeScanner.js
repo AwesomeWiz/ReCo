@@ -1,31 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import AppText from "../components/AppText";
 import api from "../api/api";
 
+const REQUIRED_SCANS = 5;
+
 export default function BarcodeScannerScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [isScanning, setIsScanning] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [scanCount, setScanCount] = useState(0);
+  const bufferRef = useRef([]);
 
-  // ✅ Hooks MUST be before any conditional returns
   useEffect(() => {
     const testConnection = async () => {
       try {
         console.log("Testing connection to:", api.defaults.baseURL);
-        const healthCheck = await api.get("/inventory");
-        console.log("Health check (GET /inventory):", healthCheck.status);
-
-        try {
-          await api.post("/inventory/barcode-lookup", {});
-        } catch (err) {
-          console.log(
-            "Route check (POST /inventory/barcode-lookup):",
-            err.response?.status,
-            err.response?.data
-          );
-        }
+        await api.get("/inventory");
       } catch (err) {
         console.log("Connection test failed:", err.message);
       }
@@ -33,7 +25,6 @@ export default function BarcodeScannerScreen({ navigation, route }) {
     testConnection();
   }, []);
 
-  // ✅ Conditional returns AFTER all hooks
   if (!permission) return <View />;
 
   if (!permission.granted) {
@@ -47,12 +38,30 @@ export default function BarcodeScannerScreen({ navigation, route }) {
     );
   }
 
-  const handleScan = async ({ data }) => {
-    if (isScanning) return;
-    setIsScanning(true);
+  const handleScan = ({ data }) => {
+    if (isProcessing || !data) return;
+
+    // Add to buffer (keep last REQUIRED_SCANS)
+    const newBuffer = [...bufferRef.current, data].slice(-REQUIRED_SCANS);
+    bufferRef.current = newBuffer;
+    setScanCount(newBuffer.filter((v) => v === data).length);
+
+    // Check if we have REQUIRED_SCANS identical consecutive reads
+    if (
+      newBuffer.length === REQUIRED_SCANS &&
+      newBuffer.every((val) => val === data)
+    ) {
+      bufferRef.current = [];
+      setScanCount(0);
+      processBarcode(data);
+    }
+  };
+
+  const processBarcode = async (data) => {
+    setIsProcessing(true);
 
     try {
-      // 🔹 INVENTORY MODE — pass barcode back to Inventory tab
+      // INVENTORY MODE — pass barcode back
       if (route?.params?.mode === "inventory") {
         setTorchOn(false);
         navigation.navigate("Main", {
@@ -62,7 +71,7 @@ export default function BarcodeScannerScreen({ navigation, route }) {
         return;
       }
 
-      // 🔹 SALES MODE — lookup barcode in inventory
+      // SALES MODE — lookup barcode in inventory
       const res = await api.post("/inventory/barcode-lookup", {
         barcode: data,
       });
@@ -84,13 +93,13 @@ export default function BarcodeScannerScreen({ navigation, route }) {
           "Product Not Found",
           res.data.message || "No product with this barcode exists."
         );
-        setIsScanning(false);
+        setIsProcessing(false);
       }
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.message;
       console.log("Barcode lookup error:", errorMsg);
       Alert.alert("Lookup Failed", errorMsg);
-      setIsScanning(false);
+      setIsProcessing(false);
     }
   };
 
@@ -101,7 +110,7 @@ export default function BarcodeScannerScreen({ navigation, route }) {
         barcodeScannerSettings={{
           barcodeTypes: ["ean13", "ean8", "code128", "upc_a", "upc_e"],
         }}
-        onBarcodeScanned={handleScan}
+        onBarcodeScanned={isProcessing ? undefined : handleScan}
         enableTorch={torchOn}
       />
 
@@ -115,6 +124,13 @@ export default function BarcodeScannerScreen({ navigation, route }) {
       >
         <AppText style={{ color: "#fff" }}>✕ Close</AppText>
       </TouchableOpacity>
+
+      {/* Verification counter */}
+      <View style={styles.verifyBadge}>
+        <AppText style={styles.verifyText}>
+          Verification: {scanCount}/{REQUIRED_SCANS}
+        </AppText>
+      </View>
 
       {/* Flashlight toggle */}
       <TouchableOpacity
@@ -142,6 +158,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
+  },
+
+  verifyBadge: {
+    position: "absolute",
+    bottom: 110,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+  },
+  verifyText: {
+    color: "#2254C5",
+    fontWeight: "600",
+    fontSize: 14,
   },
 
   torchBtn: {
