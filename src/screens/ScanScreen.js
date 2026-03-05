@@ -6,17 +6,6 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
-  Alert,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
