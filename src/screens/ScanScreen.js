@@ -413,8 +413,9 @@ const styles = StyleSheet.create({
     height: "45%",
   },
   scannerFrameBarcode: {
-    top: "30%",
-    height: "20%"
+    top: undefined, // Strip the generic top
+    bottom: "55%",  // Mount right precisely upon the top of the 55% bottom sheet
+    height: "25%",
   },
 
   torchBtn: {
