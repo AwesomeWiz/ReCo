@@ -6,12 +6,14 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useTensorflowModel } from "react-native-fast-tflite";
 import AppText from "../components/AppText";
 import classNames from "../data/class_names.json";
+import api from "../api/api"; // Added the missing API import
 
 export default function ScanScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -92,6 +94,8 @@ export default function ScanScreen({ navigation, route }) {
 
   // ─── NEW State for Barcode Cart ───────────────────────────────────────────
   const [scannedItems, setScannedItems] = useState([]);
+
+  const [torchOn, setTorchOn] = useState(false);
   const [verificationProgress, setVerificationProgress] = useState({ active: false, count: 0 });
 
   // ─── Barcode scan handler ─────────────────────────────────────────────────
@@ -122,9 +126,8 @@ export default function ScanScreen({ navigation, route }) {
           setScannedItems((prev) => {
             const existing = prev.find(item => item.barcode === prod.barcode);
             if (existing) {
-              return prev.map(item =>
-                item.barcode === prod.barcode ? { ...item, qty: item.qty + 1 } : item
-              );
+              // Product is already in the list, don't auto-increment
+              return prev;
             } else {
               return [...prev, {
                 productName: prod.name,
@@ -156,6 +159,13 @@ export default function ScanScreen({ navigation, route }) {
       return prev.map(item => {
         if (item.barcode === barcode) {
           const newQty = item.qty + delta;
+
+          // Prevent going above max stock
+          if (delta > 0 && item.stock !== null && newQty > item.stock) {
+            Alert.alert("Max Stock", `Only ${item.stock} items available in inventory.`);
+            return item;
+          }
+
           return { ...item, qty: newQty > 0 ? newQty : 0 };
         }
         return item;
@@ -204,6 +214,7 @@ export default function ScanScreen({ navigation, route }) {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
+        enableTorch={torchOn}
         onBarcodeScanned={barcodeMode ? handleBarcodeScanned : undefined}
         barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
       />
@@ -216,8 +227,20 @@ export default function ScanScreen({ navigation, route }) {
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
+      {/* Flashlight Toggle (Barcode Only) */}
+      {barcodeMode && (
+        <TouchableOpacity
+          style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
+          onPress={() => setTorchOn(!torchOn)}
+        >
+          <AppText style={{ color: torchOn ? "#000" : "#FFF", fontSize: 18 }}>
+            {torchOn ? "🔦" : "🔦"}
+          </AppText>
+        </TouchableOpacity>
+      )}
+
       {/* Scanner Frame */}
-      <View style={styles.scannerFrame}>
+      <View style={[styles.scannerFrame, barcodeMode && styles.scannerFrameBarcode]}>
         <View style={[styles.corner, styles.topLeft, { borderColor: cornerColor }]} />
         <View style={[styles.corner, styles.topRight, { borderColor: cornerColor }]} />
         <View style={[styles.corner, styles.bottomLeft, { borderColor: cornerColor }]} />
@@ -272,7 +295,7 @@ export default function ScanScreen({ navigation, route }) {
             </View>
 
             {/* List */}
-            <View style={styles.cartList}>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.cartList}>
               {scannedItems.length === 0 ? (
                 <AppText style={styles.emptyCartText}>
                   Point camera at a barcode to scan.
@@ -298,7 +321,7 @@ export default function ScanScreen({ navigation, route }) {
                   </View>
                 ))
               )}
-            </View>
+            </ScrollView>
 
             {/* Review Button */}
             <TouchableOpacity
@@ -388,6 +411,29 @@ const styles = StyleSheet.create({
     left: "10%",
     width: "80%",
     height: "45%",
+  },
+  scannerFrameBarcode: {
+    top: "30%",
+    height: "20%"
+  },
+
+  torchBtn: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  torchBtnActive: {
+    backgroundColor: "#FFD700",
+    borderColor: "#FFF",
   },
   corner: { width: 24, height: 24, position: "absolute" },
   topLeft: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },

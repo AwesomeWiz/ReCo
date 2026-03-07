@@ -7,7 +7,8 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal
 } from "react-native";
 import AppText from "../components/AppText";
 import api from "../api/api";
@@ -22,6 +23,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
   const [product, setProduct] = useState(routePrediction);
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const {
     transactionId,
@@ -150,15 +152,19 @@ export default function ConfirmProductScreen({ route, navigation }) {
       await fetchCart(activeId);
       if (!isCartFlow) setQuantity(1);
 
-      // If cart mode, we usually want to jump straight to checkout preview, 
-      // or at least alert success
       if (isCartFlow) {
-        Alert.alert("Success", "All scanned items added to Cart!");
+        // Complete the transaction seamlessly in 1-click
+        await api.post("/transactions/complete", { transaction_id: activeId });
+        setTransactionId(null);
+        setCartItems([]);
+        setShowSuccess(true); // Trigger the beautiful success modal
+      } else {
+        Alert.alert("Success", "Added to Cart!");
       }
-
     } catch (err) {
-      console.log(err.response?.data || err.message);
-      alert("Failed to add items to cart");
+      console.log("Checkout Error:", err.response?.data || err.message);
+      const errorMsg = err.response?.data?.error || err.message || "Unknown error";
+      Alert.alert("Checkout Failed", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -188,15 +194,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
     0
   );
 
-  // ─── Loading State ───────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.safe, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={ACCENT} />
-        <AppText style={{ marginTop: 16, color: "#808080" }}>Looking up barcode…</AppText>
-      </SafeAreaView>
-    );
-  }
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -218,7 +216,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
           {isCartFlow ? (
             <>
               <AppText style={[styles.label, { marginBottom: 12, fontSize: 18, fontWeight: "bold" }]}>
-                Scanned Items ({cartData.length})
+                Scanned Items
               </AppText>
 
               {cartData.map((item, idx) => (
@@ -234,14 +232,21 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 Cart Total: ₹{cartModeTotal.toFixed(2)}
               </AppText>
 
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={handleAddItem}
-              >
-                <AppText style={styles.btnText}>
-                  Add All To Order
-                </AppText>
-              </TouchableOpacity>
+              <View style={styles.checkoutBtnRow}>
+                <TouchableOpacity
+                  style={[styles.checkoutBtn, styles.cancelBtn]}
+                  onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
+                >
+                  <AppText style={[styles.btnText, { color: "#333" }]}>Cancel</AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.checkoutBtn, styles.confirmBtn]}
+                  onPress={handleAddItem}
+                >
+                  <AppText style={styles.btnText}>Checkout</AppText>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <>
@@ -308,55 +313,165 @@ export default function ConfirmProductScreen({ route, navigation }) {
             </>
           )}
 
-          {/* Continue Scan Button */}
-          <TouchableOpacity
-            style={styles.scanBtn}
-            onPress={handleContinueScan}
-          >
-            <AppText style={styles.scanText}>
-              Continue Scan
-            </AppText>
-          </TouchableOpacity>
-        </View>
-
-        {/* Cart Preview */}
-        {cartItems.length > 0 && (
-          <View style={styles.cartCard}>
-            <AppText font="bold" style={{ marginBottom: 10 }}>
-              Cart Preview
-            </AppText>
-
-            {cartItems.map((item, index) => (
-              <View key={index} style={styles.cartRow}>
-                <AppText>{item.description} x{item.qty}</AppText>
-                <AppText>₹{item.amount}</AppText>
-              </View>
-            ))}
-
-            <View style={styles.divider} />
-
-            <View style={styles.cartRow}>
-              <AppText font="bold">TOTAL</AppText>
-              <AppText font="bold">₹{cartTotal}</AppText>
-            </View>
-
+          {/* Continue Scan Button (Only for Single Product) */}
+          {!isCartFlow && (
             <TouchableOpacity
-              style={styles.checkoutBtn}
-              onPress={handleCheckout}
+              style={styles.scanBtn}
+              onPress={handleContinueScan}
             >
-              <AppText style={styles.btnText}>
-                Checkout
+              <AppText style={styles.scanText}>
+                Continue Scan
               </AppText>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+
+        </View>
 
       </ScrollView>
+
+      {/* ─── Loading Overlay Modal ─── */}
+      <Modal
+        visible={loading}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={ACCENT} />
+            <AppText style={styles.loadingText}>
+              {isCartFlow ? "Processing Checkout..." : "Looking up barcode..."}
+            </AppText>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── Premium Success Modal ─── */}
+      <Modal
+        visible={showSuccess}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalIconContainer}>
+              <AppText style={{ fontSize: 50, color: "#FFF" }}>✓</AppText>
+            </View>
+            <AppText font="bold" style={styles.modalTitle}>Checkout Complete!</AppText>
+            <AppText style={styles.modalText}>Your transaction has been successfully recorded.</AppText>
+
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={() => {
+                setShowSuccess(false);
+                navigation.navigate("Main", { screen: "Dashboard" });
+              }}
+            >
+              <AppText font="bold" style={{ color: "#FFF", fontSize: 16 }}>Back to Dashboard</AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingBox: {
+    backgroundColor: "#FFF",
+    padding: 24,
+    borderRadius: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#444",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalBox: {
+    backgroundColor: "#FFF",
+    width: "90%",
+    borderRadius: 24,
+    padding: 30,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#4CAF50",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    shadowColor: "#4CAF50",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 24,
+    color: "#2254C5",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  modalText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  modalBtn: {
+    backgroundColor: "#2254C5",
+    width: "100%",
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  checkoutBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 10,
+  },
+  checkoutBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: "center",
+  },
+  cancelBtn: {
+    backgroundColor: "#ccc",
+    marginRight: 8,
+  },
+  confirmBtn: {
+    backgroundColor: "#2254C5",
+    marginLeft: 8,
+  },
   safe: {
     flex: 1,
     backgroundColor: BG,
