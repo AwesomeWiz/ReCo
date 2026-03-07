@@ -173,6 +173,8 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         <AppText style={s.versionText}>ReCo · v1.0</AppText>
+        <AppText style={s.creditsText}>Made with love from Kakkanad 🌴</AppText>
+        <AppText style={s.creditsSubText}>By Abhishikth, Arnold, Alen Abhraham Saji and Alan Jophy</AppText>
       </ScrollView>
     </SafeAreaView>
   );
@@ -283,5 +285,18 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: MUTED,
     marginTop: 8,
+  },
+  creditsText: {
+    textAlign: "center",
+    fontSize: 12,
+    color: TEXT,
+    fontWeight: "500",
+    marginTop: 6,
+  },
+  creditsSubText: {
+    textAlign: "center",
+    fontSize: 10,
+    color: MUTED,
+    marginTop: 2,
   },
 });

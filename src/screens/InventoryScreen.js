@@ -144,7 +144,19 @@ export default function InventoryScreen({ navigation, route }) {
         {/* ADD BUTTON */}
         <TouchableOpacity
           style={s.addBtn}
-          onPress={() => setShowAdd(!showAdd)}
+          onPress={() => {
+            if (showAdd) {
+              // Clear all form fields when cancelling
+              setProductName("");
+              setSearchQuery("");
+              setCategory("");
+              setPrice("");
+              setStock("");
+              setBarcode("");
+              setFilteredProducts([]);
+            }
+            setShowAdd(!showAdd);
+          }}
         >
           <AppText font="satoshi" style={s.addText}>
             {showAdd ? "Cancel" : "Add Product"}

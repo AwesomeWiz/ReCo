@@ -156,27 +156,26 @@ export default function DashboardScreen() {
   const [sales, setSales] = useState([]);
   const [shopName, setShopName] = useState("");
   const [shopLocation, setShopLocation] = useState("");
-  const totalRevenue = sales.reduce(
-    (sum, s) => sum + Number(s.amount || 0),
-    0
-  );
+  const [daySummary, setDaySummary] = useState(null);
 
-  const totalItems = sales.reduce(
-    (sum, s) => sum + Number(s.qty || 0),
-    0
-  );
+  // Use the analytics summary for revenue (same source as Analytics screen)
+  const totalRevenue = daySummary?.total_sales ?? sales.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const totalItems = daySummary?.total_items ?? sales.reduce((sum, s) => sum + Number(s.qty || 0), 0);
+  const totalTransactions = daySummary?.total_transactions ?? sales.length;
 
-  const totalTransactions = sales.length;
   const [loading, setLoading] = useState(false);
 
   const fetchTodaySales = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/sales/today");
-      setSales(res.data || []);
+      const [salesRes, summaryRes] = await Promise.allSettled([
+        api.get("/sales/today"),
+        api.get("/analytics/summary?period=daily"),
+      ]);
+      if (salesRes.status === "fulfilled") setSales(salesRes.value.data || []);
+      if (summaryRes.status === "fulfilled") setDaySummary(summaryRes.value.data);
     } catch (err) {
       console.log("Failed to fetch today's sales", err);
-      setSales([]);
     } finally {
       setLoading(false);
     }
@@ -260,11 +259,16 @@ export default function DashboardScreen() {
           <ZigzagEdge flip />
         </View>
 
-        {/* View Full */}
+        {/* View Full / Transactions row */}
         <View style={s.viewFullWrap}>
-          <TouchableOpacity onPress={() => navigation.navigate("SalesHistory")}>
+          <TouchableOpacity onPress={() => navigation.navigate("TodaySales")}>
             <AppText font="satoshi" style={s.viewFull}>
-              View Full {sales.length > 6 && `(${sales.length} total)`}
+              View Full Sales {sales.length > 6 && `(${sales.length} total)`}
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate("SalesHistory")} style={s.txnBtn}>
+            <AppText font="satoshi" style={s.txnBtnText}>
+              Transactions
             </AppText>
           </TouchableOpacity>
         </View>
@@ -434,7 +438,9 @@ const s = StyleSheet.create({
   },
 
   viewFullWrap: {
-    alignItems: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: -8,
     marginBottom: 16,
     paddingHorizontal: 14,
@@ -444,6 +450,18 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.3,
+  },
+
+  txnBtn: {
+    backgroundColor: ACCENT,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+  },
+  txnBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   // ── Analytics card ──

@@ -10,6 +10,7 @@ import BarcodeScannerScreen from "../screens/BarcodeScanner"; // ✅ NEW
 import ConfirmProductScreen from "../screens/ConfirmProductScreen";
 import SalesHistoryScreen from "../screens/SalesHistory";
 import TransactionDetailsScreen from "../screens/TransactionDetailsScreen";
+import TodaySalesScreen from "../screens/TodaySalesScreen";
 import BottomTabs from "./BottomTabs";
 
 const Stack = createNativeStackNavigator();
@@ -46,6 +47,10 @@ export default function AppNavigator() {
         <Stack.Screen
           name="TransactionDetails"
           component={TransactionDetailsScreen}
+        />
+        <Stack.Screen
+          name="TodaySales"
+          component={TodaySalesScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>

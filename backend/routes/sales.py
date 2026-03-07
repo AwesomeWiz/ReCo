@@ -291,11 +291,13 @@ def get_today_sales(user_id):
 
     try:
         cur.execute("""
-            SELECT product_name, quantity, price, total
-            FROM sales
-            WHERE shop_id = %s
-              AND DATE(created_at) = CURDATE()
-            ORDER BY created_at DESC
+            SELECT s.product_name, s.quantity, s.price, s.total
+            FROM sales s
+            JOIN transactions t ON s.transaction_id = t.id
+            WHERE s.shop_id = %s
+              AND DATE(s.created_at) = CURDATE()
+              AND t.status = 'completed'
+            ORDER BY s.created_at DESC
         """, (user_id,))
 
         rows = cur.fetchall()
@@ -467,19 +469,34 @@ def analytics_summary(user_id):
     cur = conn.cursor()
 
     try:
-        # ── Total sales, transactions & items sold ──────────
+        # ── Total sales & transactions (No JOIN to avoid inflated sums) ──────────
         cur.execute(f"""
             SELECT
-                COALESCE(SUM(t.total), 0)    AS total_sales,
-                COUNT(DISTINCT t.id)         AS total_transactions,
-                COALESCE(SUM(s.quantity), 0) AS total_items
+                COALESCE(SUM(total), 0) AS total_sales,
+                COUNT(id)               AS total_transactions
             FROM transactions t
-            LEFT JOIN sales s ON s.transaction_id = t.id AND s.shop_id = t.shop_id
             WHERE t.shop_id = %s
               AND t.status = 'completed'
               AND {pf_t}
         """, (user_id,))
-        summary = cur.fetchone()
+        txn_summary = cur.fetchone()
+
+        # ── Total items sold ──────────
+        cur.execute(f"""
+            SELECT COALESCE(SUM(s.quantity), 0) AS total_items
+            FROM sales s
+            JOIN transactions t ON s.transaction_id = t.id
+            WHERE t.shop_id = %s
+              AND t.status = 'completed'
+              AND {pf_t}
+        """, (user_id,))
+        items_summary = cur.fetchone()
+
+        summary = {
+            "total_sales": txn_summary["total_sales"],
+            "total_transactions": txn_summary["total_transactions"],
+            "total_items": items_summary["total_items"]
+        }
 
         # ── Top selling product ─────────────────────────────
         cur.execute(f"""
