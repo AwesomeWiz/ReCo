@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useContext } from "react";
 import {
   View,
   StyleSheet,
@@ -6,12 +6,17 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import AppText from "../components/AppText";
 import api from "../api/api";
+import { CartContext } from "../context/CartContext";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -53,6 +58,10 @@ export default function ProfileScreen({ navigation }) {
   const [phone, setPhone] = useState("");
   const [totalItems, setTotalItems] = useState(null);
   const [totalSales, setTotalSales] = useState(null);
+  const [upiId, setUpiId] = useState("");
+  const [showUpiModal, setShowUpiModal] = useState(false);
+  const [tempUpi, setTempUpi] = useState("");
+  const { clearCart } = useContext(CartContext);
 
   useFocusEffect(
     useCallback(() => {
@@ -63,12 +72,14 @@ export default function ProfileScreen({ navigation }) {
         const countryV = await AsyncStorage.getItem("country");
         const districtV = await AsyncStorage.getItem("district");
         const phoneV = await AsyncStorage.getItem("phone");
+        const upiV = await AsyncStorage.getItem("upi_id");
+
         setStoreName(name || "My Store");
         setState(stateV || "");
         setDistrict(districtV || "");
         setCountry(countryV || "");
-        setDistrict(districtV || "");
         setPhone(phoneV || "");
+        setUpiId(upiV || "");
       })();
 
       // Fetch quick stats
@@ -88,6 +99,12 @@ export default function ProfileScreen({ navigation }) {
     }, [])
   );
 
+  const handleSaveUpi = async () => {
+    await AsyncStorage.setItem("upi_id", tempUpi);
+    setUpiId(tempUpi);
+    setShowUpiModal(false);
+  };
+
   const handleLogout = () => {
     Alert.alert("Log out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
@@ -95,8 +112,20 @@ export default function ProfileScreen({ navigation }) {
         text: "Log out",
         style: "destructive",
         onPress: async () => {
-          await AsyncStorage.multiRemove(["token", "store_name", "state", "district", "country", "phone"]);
-          navigation.replace("Login");
+          await AsyncStorage.multiRemove([
+            "token",
+            "store_name",
+            "state",
+            "district",
+            "country",
+            "phone",
+            "upi_id"
+          ]);
+          clearCart();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" }],
+          });
         },
       },
     ]);
@@ -157,6 +186,16 @@ export default function ProfileScreen({ navigation }) {
               <RowItem icon="call-outline" label="Phone" value={phone} />
             </>
           ) : null}
+          <View style={s.divider} />
+          <RowItem
+            icon="qr-code-outline"
+            label="UPI ID"
+            value={upiId || "Not set"}
+            onPress={() => {
+              setTempUpi(upiId);
+              setShowUpiModal(true);
+            }}
+          />
         </View>
 
         {/* ── App section ─────────────────────────────────────────────────────── */}
@@ -176,6 +215,45 @@ export default function ProfileScreen({ navigation }) {
         <AppText style={s.creditsText}>Made with love from Kakkanad 🌴</AppText>
         <AppText style={s.creditsSubText}>By Abhishikth, Arnold, Alen Abhraham Saji and Alan Jophy</AppText>
       </ScrollView>
+
+      {/* ─── UPI Modal ──────────────────────────────────────────────────────── */}
+      <Modal visible={showUpiModal} transparent={true} animationType="fade">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.modalContainer}
+        >
+          <View style={s.modalBox}>
+            <AppText font="bold" style={s.modalTitle}>Set UPI ID</AppText>
+            <AppText style={s.modalSubtitle}>Enter your store's UPI ID for payment QR generation</AppText>
+
+            <TextInput
+              style={s.textInput}
+              value={tempUpi}
+              onChangeText={setTempUpi}
+              placeholder="e.g. yourname@upi"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <View style={s.modalBtnRow}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.cancelBtn]}
+                onPress={() => setShowUpiModal(false)}
+              >
+                <AppText style={{ color: "#333", fontWeight: "600" }}>Cancel</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.saveBtn]}
+                onPress={handleSaveUpi}
+              >
+                <AppText style={{ color: "#FFF", fontWeight: "600" }}>Save</AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -299,4 +377,46 @@ const s = StyleSheet.create({
     color: MUTED,
     marginTop: 2,
   },
+
+  // Modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalBox: {
+    backgroundColor: "#FFF",
+    width: "100%",
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: { fontSize: 20, color: "#111", marginBottom: 6 },
+  modalSubtitle: { fontSize: 14, color: "#666", marginBottom: 20 },
+  textInput: {
+    backgroundColor: "#F7F8FA",
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: "#111",
+    marginBottom: 24,
+  },
+  modalBtnRow: { flexDirection: "row", gap: 12 },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  cancelBtn: { backgroundColor: "#EAEAEA" },
+  saveBtn: { backgroundColor: "#2254C5" },
 });

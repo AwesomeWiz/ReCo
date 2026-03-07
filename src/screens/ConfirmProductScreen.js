@@ -10,6 +10,8 @@ import {
   Alert,
   Modal
 } from "react-native";
+import QRCode from 'react-native-qrcode-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppText from "../components/AppText";
 import api from "../api/api";
 import { CartContext } from "../context/CartContext";
@@ -25,6 +27,9 @@ export default function ConfirmProductScreen({ route, navigation }) {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [upiId, setUpiId] = useState("");
+  const [storeName, setStoreName] = useState("My Store");
+
   const {
     transactionId,
     setTransactionId,
@@ -45,11 +50,19 @@ export default function ConfirmProductScreen({ route, navigation }) {
   // Cart flow logic
   const cartModeTotal = cartData.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
 
-  // ─── Barcode Lookup on mount (Single Scan only) ─────────────────────────
+  // ─── Data fetch on mount ──────────────────────────────────────────────────
   useEffect(() => {
     if (routeBarcode && !routePrediction.productName && !isCartFlow) {
       lookupBarcode(routeBarcode);
     }
+
+    // Fetch UPI details for payment QR
+    (async () => {
+      const savedUpi = await AsyncStorage.getItem("upi_id");
+      const savedName = await AsyncStorage.getItem("store_name");
+      if (savedUpi) setUpiId(savedUpi);
+      if (savedName) setStoreName(savedName);
+    })();
   }, [routeBarcode, isCartFlow]);
 
   const lookupBarcode = async (barcode) => {
@@ -232,6 +245,8 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 Cart Total: ₹{cartModeTotal.toFixed(2)}
               </AppText>
 
+              {/* --- QR Moved to Success Modal --- */}
+
               <View style={styles.checkoutBtnRow}>
                 <TouchableOpacity
                   style={[styles.checkoutBtn, styles.cancelBtn]}
@@ -354,10 +369,27 @@ export default function ConfirmProductScreen({ route, navigation }) {
         <View style={styles.modalContainer}>
           <View style={styles.modalBox}>
             <View style={styles.modalIconContainer}>
-              <AppText style={{ fontSize: 50, color: "#FFF" }}>✓</AppText>
+              <AppText style={{ fontSize: 28, color: "#FFF" }}>✓</AppText>
             </View>
             <AppText font="bold" style={styles.modalTitle}>Checkout Complete!</AppText>
             <AppText style={styles.modalText}>Your transaction has been successfully recorded.</AppText>
+
+            {/* ─── UPI Payment QR Code ─── */}
+            {isCartFlow && upiId ? (
+              <View style={styles.qrContainer}>
+                <AppText style={styles.qrTitle}>Pay via UPI</AppText>
+                <View style={styles.qrWrapper}>
+                  <QRCode
+                    value={`upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${cartModeTotal.toFixed(2)}&cu=INR`}
+                    size={220}
+                    color="#2254C5"
+                    backgroundColor="white"
+                  />
+                </View>
+                <AppText style={styles.qrSubtitle}>Total: ₹{cartModeTotal.toFixed(2)}</AppText>
+                <AppText style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{upiId}</AppText>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={styles.modalBtn}
@@ -366,7 +398,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 navigation.navigate("Main", { screen: "Dashboard" });
               }}
             >
-              <AppText font="bold" style={{ color: "#FFF", fontSize: 16 }}>Back to Dashboard</AppText>
+              <AppText font="bold" style={{ color: "#FFF", fontSize: 16 }}>Payment Complete</AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -419,13 +451,13 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   modalIconContainer: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: "#4CAF50",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 10,
     shadowColor: "#4CAF50",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.4,
@@ -433,17 +465,17 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#2254C5",
-    marginBottom: 10,
+    marginBottom: 4,
     textAlign: "center",
   },
   modalText: {
-    fontSize: 16,
+    fontSize: 13,
     color: "#666",
     textAlign: "center",
-    marginBottom: 30,
-    lineHeight: 22,
+    marginBottom: 16,
+    lineHeight: 18,
   },
   modalBtn: {
     backgroundColor: "#2254C5",
@@ -569,5 +601,38 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 24,
     alignItems: "center"
+  },
+  qrContainer: {
+    alignItems: "center",
+    marginVertical: 16,
+    padding: 16,
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  qrTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#444",
+    marginBottom: 12,
+  },
+  qrWrapper: {
+    padding: 10,
+    backgroundColor: "#FFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
+  },
+  qrSubtitle: {
+    fontSize: 14,
+    marginTop: 10,
+    color: "#2254C5",
+    fontWeight: "bold",
   }
 });

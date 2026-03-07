@@ -36,8 +36,10 @@ export default function LoginScreen({ navigation }) {
       const saved = await AsyncStorage.getItem("token");
       console.log("Saved token:", saved);
 
-      navigation.replace("Main");
-
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Main" }],
+      });
     } catch (err) {
       Alert.alert("Error", "Invalid credentials");
     }

@@ -138,7 +138,15 @@ export default function SignUpScreen({ navigation }) {
         district: district,
       });
 
-      Alert.alert("Success", "Account created successfully");
+      Alert.alert("Success", "Account created successfully", [
+        {
+          text: "Login",
+          onPress: () => navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" }],
+          }),
+        }
+      ]);
 
     } catch (err) {
       console.log(err.response?.data || err.message);

@@ -7,7 +7,16 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  TextInput,
+  FlatList,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useTensorflowModel } from "react-native-fast-tflite";
@@ -19,14 +28,29 @@ export default function ScanScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [prediction, setPrediction] = useState(null);
-  const [barcodeMode, setBarcodeMode] = useState(false);
+  const [scanMode, setScanMode] = useState("product"); // "product", "barcode", "manual"
   const [barcodeBuffer, setBarcodeBuffer] = useState([]);
-  const cameraRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inventoryList, setInventoryList] = useState([]);
+  const [filteredInventory, setFilteredInventory] = useState([]);
+  const [torchOn, setTorchOn] = useState(false);
+  const [verificationProgress, setVerificationProgress] = useState({ active: false, count: 0 });
+  const [scannedItems, setScannedItems] = useState([]);
 
   const model = useTensorflowModel(
     require("../../assets/models/fmcg_classifier.tflite")
   );
+
   const isModelReady = model.state === "loaded";
+  const cameraRef = useRef(null);
+
+  const switchMode = (newMode) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setScanMode(newMode);
+    setPrediction(null);
+    setBarcodeBuffer([]);
+    setSearchQuery("");
+  };
 
   // ─── AI Product Identification ───────────────────────────────────────────
   const handleCapture = useCallback(async () => {
@@ -92,15 +116,57 @@ export default function ScanScreen({ navigation, route }) {
     });
   };
 
-  // ─── NEW State for Barcode Cart ───────────────────────────────────────────
-  const [scannedItems, setScannedItems] = useState([]);
+  // ─── Search states and logic ──────────────────────────────────────────────
 
-  const [torchOn, setTorchOn] = useState(false);
-  const [verificationProgress, setVerificationProgress] = useState({ active: false, count: 0 });
+
+  React.useEffect(() => {
+    if (scanMode === "manual" && inventoryList.length === 0) {
+      api.get("/inventory")
+        .then(res => {
+          setInventoryList(res.data || []);
+          setFilteredInventory(res.data || []);
+        })
+        .catch(err => console.log("Inventory fetch error:", err));
+    }
+  }, [scanMode]);
+
+  React.useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredInventory(inventoryList);
+    } else {
+      const q = searchQuery.toLowerCase();
+      setFilteredInventory(
+        inventoryList.filter((item) => {
+          const nm = item.name || item.product_name || item.productName || "";
+          return nm.toLowerCase().includes(q);
+        })
+      );
+    }
+  }, [searchQuery, inventoryList]);
+
+  const handleManualSelect = (prod) => {
+    if (prod.stock <= 0) {
+      Alert.alert("Out of Stock", "This item has no available stock.");
+      return;
+    }
+    setScannedItems((prev) => {
+      const existing = prev.find(item => item.barcode === prod.barcode);
+      if (existing) return prev;
+      return [...prev, {
+        productName: prod.name || prod.product_name || prod.productName || "Unknown",
+        category: prod.category,
+        price: Number(prod.price),
+        stock: prod.stock,
+        barcode: prod.barcode,
+        qty: 1
+      }];
+    });
+    setSearchQuery("");
+  };
 
   // ─── Barcode scan handler ─────────────────────────────────────────────────
   const handleBarcodeScanned = async ({ data }) => {
-    if (!barcodeMode || !data || isAnalyzing) return;
+    if (scanMode !== "barcode" || !data || isAnalyzing) return;
 
     const newBuffer = [...barcodeBuffer, data].slice(-5);
     setBarcodeBuffer(newBuffer);
@@ -204,71 +270,38 @@ export default function ScanScreen({ navigation, route }) {
   }
 
   const confidencePct = prediction ? `${Math.round(prediction.confidence * 100)}%` : null;
-  const isDetected = !!prediction && !barcodeMode;
+  const isDetected = !!prediction && scanMode === "product";
   const cornerColor = isDetected ? "#2EFF00" : "#FFFFFF";
 
   return (
     <View style={styles.container}>
       {/* Camera */}
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="back"
-        enableTorch={torchOn}
-        onBarcodeScanned={barcodeMode ? handleBarcodeScanned : undefined}
-        barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
-      />
-
-      {/* Close button */}
-      <TouchableOpacity
-        style={styles.closeBtn}
-        onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
-      >
-        <AppText style={{ fontSize: 18 }}>✕</AppText>
-      </TouchableOpacity>
-
-      {/* Flashlight Toggle (Barcode Only) */}
-      {barcodeMode && (
-        <TouchableOpacity
-          style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
-          onPress={() => setTorchOn(!torchOn)}
-        >
-          <AppText style={{ color: torchOn ? "#000" : "#FFF", fontSize: 18 }}>
-            {torchOn ? "🔦" : "🔦"}
-          </AppText>
-        </TouchableOpacity>
+      {scanMode !== "manual" && (
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="back"
+          enableTorch={torchOn}
+          onBarcodeScanned={scanMode === "barcode" ? handleBarcodeScanned : undefined}
+          barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
+        />
       )}
 
-      {/* Scanner Frame */}
-      <View style={[styles.scannerFrame, barcodeMode && styles.scannerFrameBarcode]}>
-        <View style={[styles.corner, styles.topLeft, { borderColor: cornerColor }]} />
-        <View style={[styles.corner, styles.topRight, { borderColor: cornerColor }]} />
-        <View style={[styles.corner, styles.bottomLeft, { borderColor: cornerColor }]} />
-        <View style={[styles.corner, styles.bottomRight, { borderColor: cornerColor }]} />
-      </View>
+      {/* Top UI Overlays */}
 
-      {/* Mode Toggle */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleBtn, !barcodeMode && styles.toggleActive]}
-          onPress={() => { setBarcodeMode(false); setPrediction(null); setBarcodeBuffer([]); }}
-        >
-          <AppText style={[styles.toggleText, !barcodeMode && styles.toggleTextActive]}>
-            Product Scan
-          </AppText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleBtn, barcodeMode && styles.toggleActive]}
-          onPress={() => { setBarcodeMode(true); setPrediction(null); setBarcodeBuffer([]); }}
-        >
-          <AppText style={[styles.toggleText, barcodeMode && styles.toggleTextActive]}>
-            Barcode
-          </AppText>
-        </TouchableOpacity>
-      </View>
+
+      {/* Scanner Frame */}
+      {scanMode !== "manual" && (
+        <View style={scanMode === "barcode" ? styles.barcodeTargetFrame : styles.scannerFrame}>
+          <View style={[styles.corner, styles.topLeft, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.topRight, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.bottomLeft, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.bottomRight, { borderColor: cornerColor }]} />
+        </View>
+      )}
 
       {/* ─── Verification Overlay (Barcode Mode Only) ─── */}
-      {barcodeMode && verificationProgress.active && (
+      {scanMode === "barcode" && verificationProgress.active && (
         <View style={styles.verificationOverlay}>
           <AppText style={styles.verificationText}>
             Verifying {verificationProgress.count}/5
@@ -277,9 +310,84 @@ export default function ScanScreen({ navigation, route }) {
       )}
 
       {/* Bottom sheet */}
-      <View style={[styles.bottomSheet, barcodeMode && styles.bottomSheetCart]}>
-        {barcodeMode ? (
+      <View style={[styles.bottomSheet, scanMode === "barcode" && styles.bottomSheetCart, scanMode === "manual" && styles.bottomSheetManual]}>
+
+        {/* Full-Width Mode Toggle enclosed in Bottom Sheet */}
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, scanMode === "product" && styles.toggleActive]}
+            onPress={() => switchMode("product")}
+          >
+            <AppText style={[styles.toggleText, scanMode === "product" && styles.toggleTextActive]}>
+              Product Scan
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, scanMode === "barcode" && styles.toggleActive]}
+            onPress={() => switchMode("barcode")}
+          >
+            <AppText style={[styles.toggleText, scanMode === "barcode" && styles.toggleTextActive]}>
+              Barcode
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, scanMode === "manual" && styles.toggleActive]}
+            onPress={() => switchMode("manual")}
+          >
+            <AppText style={[styles.toggleText, scanMode === "manual" && styles.toggleTextActive]}>
+              Manual
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        {scanMode !== "product" ? (
           <View style={styles.cartContainer}>
+            {scanMode === "manual" && (
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search product by name..."
+                  placeholderTextColor="#888"
+                  autoCapitalize="words"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCorrect={false}
+                />
+                {(searchQuery.length > 0) && (
+                  <View style={styles.dropdown}>
+                    {filteredInventory.length === 0 ? (
+                      <AppText style={styles.noResultsText}>No products found.</AppText>
+                    ) : (
+                      <FlatList
+                        data={filteredInventory}
+                        keyExtractor={(item) => item.id.toString()}
+                        keyboardShouldPersistTaps="handled"
+                        style={{ maxHeight: 200 }}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity
+                            style={[styles.dropdownRow, item.stock <= 0 && styles.outOfStockRow]}
+                            onPress={() => handleManualSelect(item)}
+                            disabled={item.stock <= 0}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <AppText font="semibold" style={{ color: item.stock <= 0 ? "#999" : "#111" }}>
+                                {item.name || item.product_name || item.productName || "Unknown"}
+                              </AppText>
+                              <AppText style={{ color: item.stock <= 0 ? "#E53935" : "#666", fontSize: 12 }}>
+                                {item.stock <= 0 ? "Out of Stock" : `${item.stock} in stock`}
+                              </AppText>
+                            </View>
+                            <AppText font="bold" style={{ color: item.stock <= 0 ? "#999" : "#2254C5" }}>
+                              ₹{Number(item.price).toFixed(2)}
+                            </AppText>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
             {/* Header */}
             <View style={styles.cartHeader}>
               <View>
@@ -376,7 +484,7 @@ export default function ScanScreen({ navigation, route }) {
               <AppText
                 font="semibold"
                 style={styles.manual}
-                onPress={() => { setBarcodeMode(true); setPrediction(null); }}
+                onPress={() => switchMode("barcode")}
               >
                 Switch to Barcode Scan
               </AppText>
@@ -384,6 +492,24 @@ export default function ScanScreen({ navigation, route }) {
           </>
         )}
       </View>
+      {/* Floating UI Elements (Top Level) */}
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
+      >
+        <AppText style={{ fontSize: 18 }}>✕</AppText>
+      </TouchableOpacity>
+
+      {scanMode === "barcode" && (
+        <TouchableOpacity
+          style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
+          onPress={() => setTorchOn(!torchOn)}
+        >
+          <AppText style={{ color: torchOn ? "#000" : "#FFF", fontSize: 18 }}>
+            🔦
+          </AppText>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -407,14 +533,16 @@ const styles = StyleSheet.create({
 
   scannerFrame: {
     position: "absolute",
-    top: "15%",
+    top: "12.5%",
     left: "10%",
     width: "80%",
-    height: "45%",
+    height: "25%",
   },
-  scannerFrameBarcode: {
-    top: undefined, // Strip the generic top
-    bottom: "55%",  // Mount right precisely upon the top of the 55% bottom sheet
+  barcodeTargetFrame: {
+    position: "absolute",
+    left: "10%",
+    width: "80%",
+    top: "12.5%",
     height: "25%",
   },
 
@@ -443,19 +571,29 @@ const styles = StyleSheet.create({
   bottomRight: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
 
   toggleContainer: {
-    position: "absolute",
-    bottom: "65%",
     flexDirection: "row",
-    alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 25,
+    backgroundColor: "#EAEAEA",
+    borderRadius: 12,
     padding: 4,
-    zIndex: 10,
+    marginBottom: 20,
+    width: "100%",
   },
-  toggleBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20 },
-  toggleActive: { backgroundColor: "#2254C5" },
-  toggleText: { color: "#ccc", fontWeight: "600" },
-  toggleTextActive: { color: "#fff" },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  toggleActive: {
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  toggleText: { color: "#666", fontWeight: "600" },
+  toggleTextActive: { color: "#2254C5", fontWeight: "bold" },
 
   bottomSheet: {
     backgroundColor: "#F9F6EE",
@@ -464,7 +602,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    minHeight: 220,
+    height: 420,
     justifyContent: "center",
   },
   barcodeModeInfo: { alignItems: "center", justifyContent: "center" },
@@ -505,9 +643,16 @@ const styles = StyleSheet.create({
   bottomSheetCart: {
     paddingTop: 16,
     paddingBottom: 24,
-    minHeight: 380,
-    maxHeight: "55%",
+    height: 420,
     justifyContent: "flex-start",
+  },
+  bottomSheetManual: {
+    flex: 1,
+    paddingTop: 50,
+    paddingBottom: 24,
+    justifyContent: "flex-start",
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   cartContainer: { flex: 1 },
   cartHeader: {
@@ -576,4 +721,53 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   verificationText: { color: "#FFF", fontWeight: "600", fontSize: 13 },
+
+  // ─── Manual Search UI Styles ──────────────────────────────────────────────
+  searchContainer: {
+    marginBottom: 16,
+    zIndex: 10,
+  },
+  searchInput: {
+    backgroundColor: "#F7F8FA",
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: "#222",
+  },
+  dropdown: {
+    position: "absolute",
+    top: 55,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    zIndex: 100,
+  },
+  dropdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  outOfStockRow: {
+    backgroundColor: "#FAFAFA",
+    opacity: 0.7,
+  },
+  noResultsText: {
+    padding: 16,
+    textAlign: "center",
+    color: "#888",
+    fontStyle: "italic",
+  },
 });
