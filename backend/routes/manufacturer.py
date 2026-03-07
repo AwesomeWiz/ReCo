@@ -387,7 +387,8 @@ def dashboard_stats(mfr_id):
 @mfr_token_required
 def manufacturer_analytics(mfr_id):
 
-    period = request.args.get("period", "monthly")
+    period         = request.args.get("period", "monthly")
+    selected_product = request.args.get("product", None)  # for per-product trend
 
     date_filter = {
         "daily":   "s.created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)",
@@ -407,11 +408,11 @@ def manufacturer_analytics(mfr_id):
         product_names = [r["product_name"] for r in cur.fetchall()]
 
         if not product_names:
-            return jsonify({"regions": [], "trend": [], "stockout": []}), 200
+            return jsonify({"regions": [], "trend": [], "stockout": [], "stores": []}), 200
 
         placeholders = ", ".join(["%s"] * len(product_names))
 
-        # ── 1. Regional aggregation ──────────────────────────
+        # ── 1. Regional aggregation (all products) ────────────
         cur.execute(f"""
             SELECT
                 sh.state,
@@ -426,25 +427,34 @@ def manufacturer_analytics(mfr_id):
         """, product_names)
         regions = [dict(r) for r in cur.fetchall()]
 
-        # ── 2. Sales trend — last 14 days ────────────────────
+        # ── 2. Sales trend — filtered by selected product ─────
+        # If a specific product is requested and it belongs to this
+        # manufacturer, filter by it. Otherwise use all products.
+        if selected_product and selected_product in product_names:
+            trend_params = [selected_product]
+            trend_ph     = "%s"
+        else:
+            trend_params = product_names
+            trend_ph     = placeholders
+
         cur.execute(f"""
             SELECT
                 DATE_FORMAT(s.created_at, '%%b %%d') AS date,
                 SUM(s.quantity)                       AS units
             FROM sales s
-            WHERE s.product_name IN ({placeholders})
+            WHERE s.product_name IN ({trend_ph})
               AND s.created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
             GROUP BY DATE_FORMAT(s.created_at, '%%b %%d')
             ORDER BY MIN(s.created_at)
-        """, product_names)
+        """, trend_params)
         trend = [dict(r) for r in cur.fetchall()]
 
-        # ── 3. Stockout risk across all stores ───────────────
+        # ── 3. Stockout risk across all stores ────────────────
         cur.execute(f"""
             SELECT
                 i.product_name,
-                COUNT(CASE WHEN i.stock < 5 THEN 1 END)  AS at_risk_stores,
-                COUNT(*)                                   AS total_stores,
+                COUNT(CASE WHEN i.stock < 5 THEN 1 END) AS at_risk_stores,
+                COUNT(*)                                  AS total_stores,
                 CASE
                     WHEN AVG(i.stock) < 5  THEN 'high'
                     WHEN AVG(i.stock) < 15 THEN 'medium'
@@ -456,13 +466,14 @@ def manufacturer_analytics(mfr_id):
         """, product_names)
         stockout = [dict(r) for r in cur.fetchall()]
 
-        # ── 4. District drill-down for each region ───────────
+        # ── 4. District + store drill-down ────────────────────
+        # District level
         cur.execute(f"""
             SELECT
                 sh.state,
                 sh.district,
                 SUM(s.quantity)           AS units,
-                COUNT(DISTINCT s.shop_id) AS stores
+                COUNT(DISTINCT s.shop_id) AS store_count
             FROM sales s
             JOIN shops sh ON sh.id = s.shop_id
             WHERE s.product_name IN ({placeholders})
@@ -473,19 +484,48 @@ def manufacturer_analytics(mfr_id):
         """, product_names)
         district_rows = cur.fetchall()
 
-        # Group districts under their state
+        # Store level — include store_name and district for display
+        cur.execute(f"""
+            SELECT
+                sh.state,
+                sh.district,
+                sh.store_name,
+                SUM(s.quantity) AS units
+            FROM sales s
+            JOIN shops sh ON sh.id = s.shop_id
+            WHERE s.product_name IN ({placeholders})
+              AND {date_filter}
+            GROUP BY sh.state, sh.district, sh.id, sh.store_name
+            ORDER BY sh.state, sh.district, units DESC
+        """, product_names)
+        store_rows = cur.fetchall()
+
+        # Group stores under state+district
+        stores_by_key = {}
+        for row in store_rows:
+            key = (row["state"], row["district"])
+            if key not in stores_by_key:
+                stores_by_key[key] = []
+            stores_by_key[key].append({
+                "store_name": row["store_name"],
+                "district":   row["district"],
+                "units":      int(row["units"]),
+            })
+
+        # Group districts under state, attach stores to each district
         districts_by_state = {}
         for row in district_rows:
             state = row["state"]
             if state not in districts_by_state:
                 districts_by_state[state] = []
             districts_by_state[state].append({
-                "district": row["district"],
-                "units":    int(row["units"]),
-                "stores":   int(row["stores"]),
+                "district":    row["district"],
+                "units":       int(row["units"]),
+                "store_count": int(row["store_count"]),
+                "stores":      stores_by_key.get((row["state"], row["district"]), []),
             })
 
-        # Attach district list to each region + cast types
+        # Attach to regions + cast types
         for region in regions:
             region["districts"]   = districts_by_state.get(region["state"], [])
             region["total_units"] = int(region["total_units"])
@@ -498,13 +538,25 @@ def manufacturer_analytics(mfr_id):
         for t in trend:
             t["units"] = int(t["units"])
 
+        # Flat store list for the stores tab (sorted by units desc)
+        all_stores = []
+        for row in store_rows:
+            all_stores.append({
+                "store_name": row["store_name"],
+                "district":   row["district"] or "—",
+                "state":      row["state"] or "—",
+                "units":      int(row["units"]),
+            })
+
         return jsonify({
             "regions":  regions,
             "trend":    trend,
             "stockout": stockout,
+            "stores":   all_stores,
         }), 200
 
     except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
     finally:
