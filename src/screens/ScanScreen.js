@@ -90,24 +90,93 @@ export default function ScanScreen({ navigation, route }) {
     });
   };
 
+  // ─── NEW State for Barcode Cart ───────────────────────────────────────────
+  const [scannedItems, setScannedItems] = useState([]);
+  const [verificationProgress, setVerificationProgress] = useState({ active: false, count: 0 });
+
   // ─── Barcode scan handler ─────────────────────────────────────────────────
-  const handleBarcodeScanned = ({ data }) => {
-    if (!barcodeMode || !data) return;
+  const handleBarcodeScanned = async ({ data }) => {
+    if (!barcodeMode || !data || isAnalyzing) return;
 
     const newBuffer = [...barcodeBuffer, data].slice(-5);
     setBarcodeBuffer(newBuffer);
+    setVerificationProgress({ active: true, count: newBuffer.length });
 
     if (newBuffer.length === 5 && newBuffer.every((val) => val === data)) {
       setBarcodeBuffer([]);
+      setVerificationProgress({ active: false, count: 0 });
+      setIsAnalyzing(true); // Re-use this flag for locking camera temporarily
 
-      if (route?.params?.mode === "inventory") {
-        route.params.onScan(data);
-        navigation.goBack();
-        return;
+      try {
+        if (route?.params?.mode === "inventory") {
+          route.params.onScan(data);
+          navigation.goBack();
+          return;
+        }
+
+        // Lookup product
+        const res = await api.post("/inventory/barcode-lookup", { barcode: data });
+        if (res.data.found) {
+          const prod = res.data.product;
+
+          setScannedItems((prev) => {
+            const existing = prev.find(item => item.barcode === prod.barcode);
+            if (existing) {
+              return prev.map(item =>
+                item.barcode === prod.barcode ? { ...item, qty: item.qty + 1 } : item
+              );
+            } else {
+              return [...prev, {
+                productName: prod.name,
+                category: prod.category,
+                price: Number(prod.price),
+                stock: prod.stock,
+                barcode: prod.barcode,
+                qty: 1
+              }];
+            }
+          });
+        } else {
+          Alert.alert(
+            "Product Not Found",
+            res.data.message || "No product with this barcode exists."
+          );
+        }
+      } catch (err) {
+        console.log("Barcode lookup error:", err.response?.data?.error || err.message);
+        Alert.alert("Lookup Failed", "Could not fetch product details.");
+      } finally {
+        setTimeout(() => setIsAnalyzing(false), 800); // Temporary cooldown before next scan
       }
-
-      navigation.navigate("ConfirmProduct", { barcode: data });
     }
+  };
+
+  const handleQuantityChange = (barcode, delta) => {
+    setScannedItems((prev) => {
+      return prev.map(item => {
+        if (item.barcode === barcode) {
+          const newQty = item.qty + delta;
+          return { ...item, qty: newQty > 0 ? newQty : 0 };
+        }
+        return item;
+      }).filter(item => item.qty > 0);
+    });
+  };
+
+  const handleReviewOrder = () => {
+    if (scannedItems.length === 0) return;
+
+    // Convert array format to how ConfirmProduct expects it
+    const predictionObj = {
+      productName: scannedItems[0].productName, // Legacy prop for compatibility
+      cart: scannedItems,
+      confidence: 1.0,
+    };
+
+    navigation.navigate("ConfirmProduct", {
+      prediction: predictionObj,
+      isCartFlow: true // newly added flag for target screen to handle array logic
+    });
   };
 
   // ─── Permission gates ─────────────────────────────────────────────────────
@@ -175,15 +244,70 @@ export default function ScanScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
+      {/* ─── Verification Overlay (Barcode Mode Only) ─── */}
+      {barcodeMode && verificationProgress.active && (
+        <View style={styles.verificationOverlay}>
+          <AppText style={styles.verificationText}>
+            Verifying {verificationProgress.count}/5
+          </AppText>
+        </View>
+      )}
+
       {/* Bottom sheet */}
-      <View style={styles.bottomSheet}>
+      <View style={[styles.bottomSheet, barcodeMode && styles.bottomSheetCart]}>
         {barcodeMode ? (
-          <View style={styles.barcodeModeInfo}>
-            <AppText font="semibold" style={styles.product}>Align barcode within the frame</AppText>
-            <AppText font="regular" style={styles.detected}>Scanning happens automatically</AppText>
-            <AppText font="regular" style={{ color: "#2254C5", marginTop: 10, fontSize: 13 }}>
-              Verification: {barcodeBuffer.length}/3
-            </AppText>
+          <View style={styles.cartContainer}>
+            {/* Header */}
+            <View style={styles.cartHeader}>
+              <View>
+                <AppText font="semibold" style={styles.cartTitle}>Scanned Items</AppText>
+                <AppText style={styles.cartSubtitle}>{scannedItems.length} {scannedItems.length === 1 ? 'item' : 'items'} total</AppText>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <AppText style={styles.totalLabel}>TOTAL PRICE</AppText>
+                <AppText font="bold" style={styles.totalValue}>
+                  ₹{scannedItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0).toFixed(2)}
+                </AppText>
+              </View>
+            </View>
+
+            {/* List */}
+            <View style={styles.cartList}>
+              {scannedItems.length === 0 ? (
+                <AppText style={styles.emptyCartText}>
+                  Point camera at a barcode to scan.
+                </AppText>
+              ) : (
+                scannedItems.map((item, idx) => (
+                  <View key={item.barcode + idx} style={styles.cartItem}>
+                    <View style={{ flex: 1 }}>
+                      <AppText font="semibold" style={styles.itemName}>{item.productName}</AppText>
+                      <AppText style={styles.itemPrice}>₹{item.price.toFixed(2)}</AppText>
+                    </View>
+
+                    {/* Quantity controls */}
+                    <View style={styles.qtyBox}>
+                      <TouchableOpacity onPress={() => handleQuantityChange(item.barcode, -1)} style={styles.qtyBtn}>
+                        <AppText style={styles.qtyBtnText}>-</AppText>
+                      </TouchableOpacity>
+                      <AppText font="semibold" style={styles.qtyVal}>{item.qty}</AppText>
+                      <TouchableOpacity onPress={() => handleQuantityChange(item.barcode, 1)} style={styles.qtyBtn}>
+                        <AppText style={styles.qtyBtnText}>+</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* Review Button */}
+            <TouchableOpacity
+              style={[styles.reviewBtn, scannedItems.length === 0 && styles.reviewBtnDisabled]}
+              onPress={handleReviewOrder}
+              disabled={scannedItems.length === 0}
+            >
+              <AppText font="semibold" style={styles.reviewBtnText}>Review Order</AppText>
+            </TouchableOpacity>
           </View>
         ) : !isModelReady ? (
           <View style={styles.loadingRow}>
@@ -273,7 +397,7 @@ const styles = StyleSheet.create({
 
   toggleContainer: {
     position: "absolute",
-    bottom: "33%",
+    bottom: "65%",
     flexDirection: "row",
     alignSelf: "center",
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -329,4 +453,80 @@ const styles = StyleSheet.create({
   manual: { marginTop: 4, color: "#2254C5" },
 
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  // ─── NEW: Cart UI Styles ───────────────────────────────────────────────
+  bottomSheetCart: {
+    paddingTop: 16,
+    paddingBottom: 24,
+    minHeight: 380,
+    maxHeight: "55%",
+    justifyContent: "flex-start",
+  },
+  cartContainer: { flex: 1 },
+  cartHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAEAEA",
+  },
+  cartTitle: { fontSize: 18, color: "#111" },
+  cartSubtitle: { fontSize: 12, color: "#666", marginTop: 2 },
+  totalLabel: { fontSize: 10, color: "#666", fontWeight: "700", letterSpacing: 0.5 },
+  totalValue: { fontSize: 18, color: "#2254C5", marginTop: 2 },
+
+  cartList: { flex: 1, paddingBottom: 10 },
+  emptyCartText: { textAlign: "center", color: "#999", marginTop: 40, fontStyle: "italic" },
+
+  cartItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+  },
+  itemName: { fontSize: 15, color: "#222", marginBottom: 4 },
+  itemPrice: { fontSize: 13, color: "#666" },
+
+  qtyBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F7F8FA",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
+  },
+  qtyBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  qtyBtnText: { fontSize: 18, color: "#555", fontWeight: "600", lineHeight: 20 },
+  qtyVal: { fontSize: 15, paddingHorizontal: 4, minWidth: 20, textAlign: "center" },
+
+  reviewBtn: {
+    backgroundColor: "#2254C5",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginTop: 10,
+  },
+  reviewBtnDisabled: { backgroundColor: "#B0C4DE" },
+  reviewBtnText: { color: "#fff", fontSize: 16 },
+
+  verificationOverlay: {
+    position: "absolute",
+    top: "10%",
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    zIndex: 20,
+  },
+  verificationText: { color: "#FFF", fontWeight: "600", fontSize: 13 },
 });

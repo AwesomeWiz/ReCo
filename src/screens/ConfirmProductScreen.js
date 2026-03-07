@@ -31,17 +31,24 @@ export default function ConfirmProductScreen({ route, navigation }) {
     clearCart
   } = useContext(CartContext);
 
+  const isCartFlow = route.params?.isCartFlow || false;
+  const cartData = routePrediction.cart || [];
+
+  // Single item logic
   const price = product.price ?? 0;
-  const stock = product.stock ?? null; // null = unknown (ML), number = from inventory
+  const stock = product.stock ?? null;
   const isOutOfStock = stock !== null && stock <= 0;
   const totalItem = price * quantity;
 
-  // ─── Barcode Lookup on mount ──────────────────────────────────────────────
+  // Cart flow logic
+  const cartModeTotal = cartData.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
+
+  // ─── Barcode Lookup on mount (Single Scan only) ─────────────────────────
   useEffect(() => {
-    if (routeBarcode && !routePrediction.productName) {
+    if (routeBarcode && !routePrediction.productName && !isCartFlow) {
       lookupBarcode(routeBarcode);
     }
-  }, [routeBarcode]);
+  }, [routeBarcode, isCartFlow]);
 
   const lookupBarcode = async (barcode) => {
     setLoading(true);
@@ -85,16 +92,19 @@ export default function ConfirmProductScreen({ route, navigation }) {
   };
 
   const handleAddItem = async () => {
-    if (isOutOfStock) {
-      Alert.alert("Out of Stock", "This product is currently out of stock.");
-      return;
+    // Basic validation for single item mode
+    if (!isCartFlow) {
+      if (isOutOfStock) {
+        Alert.alert("Out of Stock", "This product is currently out of stock.");
+        return;
+      }
+      if (stock !== null && quantity > stock) {
+        Alert.alert("Insufficient Stock", `Only ${stock} items available.`);
+        return;
+      }
     }
 
-    if (stock !== null && quantity > stock) {
-      Alert.alert("Insufficient Stock", `Only ${stock} items available.`);
-      return;
-    }
-
+    setLoading(true);
     try {
       let activeId = transactionId;
 
@@ -104,22 +114,53 @@ export default function ConfirmProductScreen({ route, navigation }) {
         setTransactionId(activeId);
       }
 
-      await api.post("/transactions/add-item", {
-        transaction_id: activeId,
-        product_name: product.productName,
-        category: product.category || "",
-        barcode: product.barcode || null,
-        price,
-        quantity,
-        total: totalItem
-      });
+      if (isCartFlow) {
+        // Sequentially add all cart items
+        for (const item of cartData) {
+          // Verify stock locally before adding if we can
+          if (item.stock !== null && item.qty > item.stock) {
+            Alert.alert("Warning", `Only ${item.stock} left for ${item.productName}, adjusting quantity.`);
+            item.qty = item.stock;
+          }
+          if (item.qty > 0) {
+            await api.post("/transactions/add-item", {
+              transaction_id: activeId,
+              product_name: item.productName,
+              category: item.category || "",
+              barcode: item.barcode || null,
+              price: item.price,
+              quantity: item.qty,
+              total: item.price * item.qty
+            });
+          }
+        }
+      } else {
+        // Single item flow
+        await api.post("/transactions/add-item", {
+          transaction_id: activeId,
+          product_name: product.productName,
+          category: product.category || "",
+          barcode: product.barcode || null,
+          price,
+          quantity,
+          total: totalItem
+        });
+      }
 
       await fetchCart(activeId);
-      setQuantity(1);
+      if (!isCartFlow) setQuantity(1);
+
+      // If cart mode, we usually want to jump straight to checkout preview, 
+      // or at least alert success
+      if (isCartFlow) {
+        Alert.alert("Success", "All scanned items added to Cart!");
+      }
 
     } catch (err) {
       console.log(err.response?.data || err.message);
-      alert("Failed to add item");
+      alert("Failed to add items to cart");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -172,56 +213,25 @@ export default function ConfirmProductScreen({ route, navigation }) {
           />
         </TouchableOpacity>
 
-        {/* Current Product */}
+        {/* Current Product(s) */}
         <View style={styles.card}>
-          <AppText style={styles.label}>
-            Product: <AppText font="bold">{product.productName || "Unknown"}</AppText>
-          </AppText>
-
-          <AppText style={styles.label}>
-            Price: <AppText font="bold">₹{price}</AppText>
-          </AppText>
-
-          {stock !== null && (
-            <AppText style={[styles.label, isOutOfStock && { color: "#E53935" }]}>
-              Stock: <AppText font="bold">{isOutOfStock ? "Out of Stock" : stock}</AppText>
-            </AppText>
-          )}
-
-          {isOutOfStock ? (
-            <View style={styles.outOfStockBanner}>
-              <AppText style={styles.outOfStockText}>
-                ⚠ This product is out of stock and cannot be added to the cart.
-              </AppText>
-            </View>
-          ) : (
+          {isCartFlow ? (
             <>
-              <View style={styles.qtyRow}>
-                <TouchableOpacity
-                  onPress={() => quantity > 1 && setQuantity(quantity - 1)}
-                  style={styles.qtyBtn}
-                >
-                  <AppText>-</AppText>
-                </TouchableOpacity>
+              <AppText style={[styles.label, { marginBottom: 12, fontSize: 18, fontWeight: "bold" }]}>
+                Scanned Items ({cartData.length})
+              </AppText>
 
-                <AppText style={styles.qtyText}>{quantity}</AppText>
+              {cartData.map((item, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <AppText style={{ flex: 1 }}>{item.qty}x {item.productName}</AppText>
+                  <AppText>₹{(item.price * item.qty).toFixed(2)}</AppText>
+                </View>
+              ))}
 
-                <TouchableOpacity
-                  onPress={() => {
-                    if (stock !== null && quantity >= stock) {
-                      Alert.alert("Max Stock", `Only ${stock} items available.`);
-                    } else {
-                      setQuantity(quantity + 1);
-                    }
-                  }}
-                  style={styles.qtyBtn}
-                >
-                  <AppText>+</AppText>
-                </TouchableOpacity>
-              </View>
+              <View style={{ height: 1, backgroundColor: "#EAEAEA", marginVertical: 12 }} />
 
               <AppText style={styles.totalItem}>
-                Item Total: ₹{totalItem}
+                Cart Total: ₹{cartModeTotal.toFixed(2)}
               </AppText>
 
               <TouchableOpacity
@@ -229,9 +239,72 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 onPress={handleAddItem}
               >
                 <AppText style={styles.btnText}>
-                  Add to Cart
+                  Add All To Order
                 </AppText>
               </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <AppText style={styles.label}>
+                Product: <AppText font="bold">{product.productName || "Unknown"}</AppText>
+              </AppText>
+
+              <AppText style={styles.label}>
+                Price: <AppText font="bold">₹{price}</AppText>
+              </AppText>
+
+              {stock !== null && (
+                <AppText style={[styles.label, isOutOfStock && { color: "#E53935" }]}>
+                  Stock: <AppText font="bold">{isOutOfStock ? "Out of Stock" : stock}</AppText>
+                </AppText>
+              )}
+
+              {isOutOfStock ? (
+                <View style={styles.outOfStockBanner}>
+                  <AppText style={styles.outOfStockText}>
+                    ⚠ This product is out of stock and cannot be added to the cart.
+                  </AppText>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.qtyRow}>
+                    <TouchableOpacity
+                      onPress={() => quantity > 1 && setQuantity(quantity - 1)}
+                      style={styles.qtyBtn}
+                    >
+                      <AppText>-</AppText>
+                    </TouchableOpacity>
+
+                    <AppText style={styles.qtyText}>{quantity}</AppText>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (stock !== null && quantity >= stock) {
+                          Alert.alert("Max Stock", `Only ${stock} items available.`);
+                        } else {
+                          setQuantity(quantity + 1);
+                        }
+                      }}
+                      style={styles.qtyBtn}
+                    >
+                      <AppText>+</AppText>
+                    </TouchableOpacity>
+                  </View>
+
+                  <AppText style={styles.totalItem}>
+                    Item Total: ₹{totalItem}
+                  </AppText>
+
+                  <TouchableOpacity
+                    style={styles.addBtn}
+                    onPress={handleAddItem}
+                  >
+                    <AppText style={styles.btnText}>
+                      Add to Cart
+                    </AppText>
+                  </TouchableOpacity>
+                </>
+              )}
             </>
           )}
 

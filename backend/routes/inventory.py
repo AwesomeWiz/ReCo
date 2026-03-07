@@ -105,6 +105,11 @@ def barcode_lookup(user_id):
     cur = conn.cursor()
 
     try:
+        # DEBUG: Print all barcodes for this user to terminal to see why matching fails
+        cur.execute("SELECT barcode FROM inventory WHERE shop_id = %s AND barcode IS NOT NULL", (user_id,))
+        all_barcodes = [row["barcode"] if isinstance(row, dict) else row[0] for row in cur.fetchall()]
+        print(f"DEBUG: Looking for barcode '{barcode}' (type {type(barcode)}). DB has: {all_barcodes}")
+
         cur.execute("""
             SELECT id, product_name, category, price, stock, barcode
             FROM inventory
