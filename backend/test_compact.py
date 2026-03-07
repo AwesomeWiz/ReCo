@@ -8,7 +8,7 @@ def w(s=""):
     out.write(s + "\n")
 
 SECRET_KEY = "reco_secret_key"
-BASE       = "http://10.221.189.142:5000"
+BASE       = "http://10.0.8.90:5000"
 
 token = jwt.encode(
     {"user_id": 1, "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1)},

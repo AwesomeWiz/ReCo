@@ -108,7 +108,7 @@ export default function SignUpScreen({ navigation }) {
         return;
       }
 
-      const res = await axios.post("http://10.141.79.142:5000/signup", {
+      const res = await axios.post("http://10.0.8.90:5000/signup", {
         store: store,
         phone: phone,
         password: password,

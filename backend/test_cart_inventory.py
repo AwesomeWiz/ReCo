@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SECRET_KEY = "reco_secret_key"
-BASE       = "http://10.221.189.142:5000"
+BASE       = "http://10.0.8.90:5000"
 SHOP_ID    = 1   # Matches shops table row 1 (Test Store)
 
 # ── Generate a fresh JWT (valid for 1 day) ────────────────────────────────────
