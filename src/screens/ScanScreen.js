@@ -11,6 +11,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Alert
 } from "react-native";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -30,17 +31,36 @@ export default function ScanScreen({ navigation, route }) {
   const [isLocked, setIsLocked] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
 
+  // New UI states merged in
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inventoryList, setInventoryList] = useState([]);
+  const [filteredInventory, setFilteredInventory] = useState([]);
+  const [torchOn, setTorchOn] = useState(false);
+  const [verificationProgress, setVerificationProgress] = useState({ active: false, count: 0 });
+  const [scannedItems, setScannedItems] = useState([]);
+
+
   // Stable refs — avoid stale closure problems in the scan loop
   const isAnalyzingRef = useRef(false);
   const isLockedRef = useRef(false);
-  const barcodeModeRef = useRef(false);
+  const scanModeRef = useRef("product");
   const cameraReadyRef = useRef(false);
   const cameraRef = useRef(null);
 
   // Keep refs in sync with state so the scan loop always reads fresh values
   useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
-  useEffect(() => { barcodeModeRef.current = barcodeMode; }, [barcodeMode]);
+  useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
   useEffect(() => { cameraReadyRef.current = cameraReady; }, [cameraReady]);
+
+
+  const switchMode = (newMode) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setScanMode(newMode);
+    setPrediction(null);
+    setBarcodeBuffer([]);
+    setSearchQuery("");
+    setIsLocked(false);
+  };
 
   // ─── AI Product Identification via backend /classify ──────────────────────
   const runInference = useCallback(async () => {
@@ -49,7 +69,7 @@ export default function ScanScreen({ navigation, route }) {
       !cameraReadyRef.current ||
       isAnalyzingRef.current ||
       isLockedRef.current ||
-      barcodeModeRef.current
+      scanModeRef.current !== "product"
     ) return;
 
     isAnalyzingRef.current = true;
@@ -91,13 +111,13 @@ export default function ScanScreen({ navigation, route }) {
   // ─── Continuous scanning loop ──────────────────────────────────────
   // Starts 2s after the camera is ready, waits for each capture before the next
   useEffect(() => {
-    if (barcodeMode || isLocked || !cameraReady) return;
+    if (scanMode !== "product" || isLocked || !cameraReady) return;
 
     let active = true;
     const loop = async () => {
       // Give camera 2 s to fully settle (autofocus, exposure)
       await new Promise((res) => setTimeout(res, 2000));
-      while (active && !isLockedRef.current && !barcodeModeRef.current) {
+      while (active && !isLockedRef.current && scanModeRef.current === "product") {
         await runInference();
         await new Promise((res) => setTimeout(res, 1200));
       }
@@ -105,7 +125,7 @@ export default function ScanScreen({ navigation, route }) {
     loop();
 
     return () => { active = false; };
-  }, [barcodeMode, isLocked, cameraReady, runInference]);
+  }, [scanMode, isLocked, cameraReady, runInference]);
 
   // ─── Confirm prediction → navigate ───────────────────────────────────────
   const handleConfirm = () => {
@@ -120,9 +140,7 @@ export default function ScanScreen({ navigation, route }) {
   };
 
   // ─── Search states and logic ──────────────────────────────────────────────
-
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (scanMode === "manual" && inventoryList.length === 0) {
       api.get("/inventory")
         .then(res => {
@@ -133,7 +151,7 @@ export default function ScanScreen({ navigation, route }) {
     }
   }, [scanMode]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredInventory(inventoryList);
     } else {
@@ -148,7 +166,9 @@ export default function ScanScreen({ navigation, route }) {
   }, [searchQuery, inventoryList]);
 
   const handleManualSelect = (prod) => {
-    if (prod.stock <= 0) {
+    // Treat null stock as infinite (or handle it gracefully) if your DB allows it.
+    // If you strictly require stock tracking everywhere, keep the `stock <= 0` check.
+    if (prod.stock !== null && prod.stock <= 0) {
       Alert.alert("Out of Stock", "This item has no available stock.");
       return;
     }
@@ -273,23 +293,26 @@ export default function ScanScreen({ navigation, route }) {
   }
 
   const confidencePct = prediction ? `${Math.round(prediction.confidence * 100)}%` : null;
-  const isDetected = isLocked && !barcodeMode;
+  const isDetected = isLocked && scanMode === "product";
   const cornerColor = isDetected ? "#2EFF00" : "#FFFFFF";
 
   return (
     <View style={styles.container}>
       {/* Camera */}
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="back"
-        enableTorch={torchOn}
-        onCameraReady={() => setCameraReady(true)}
-        onBarcodeScanned={barcodeMode ? handleBarcodeScanned : undefined}
-        barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
-      />
+      {scanMode !== "manual" && (
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="back"
+          enableTorch={torchOn}
+          onCameraReady={() => setCameraReady(true)}
+          onBarcodeScanned={scanMode === "barcode" ? handleBarcodeScanned : undefined}
+          barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
+        />
+      )}
 
-      {/* Close button */}
+
+      {/* Floating UI Elements (Top Level) */}
       <TouchableOpacity
         style={styles.closeBtn}
         onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
@@ -297,45 +320,27 @@ export default function ScanScreen({ navigation, route }) {
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
-      {/* Flashlight Toggle (Barcode Only) */}
-      {barcodeMode && (
+      {scanMode === "barcode" && (
         <TouchableOpacity
           style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
           onPress={() => setTorchOn(!torchOn)}
         >
           <AppText style={{ color: torchOn ? "#000" : "#FFF", fontSize: 18 }}>
-            {torchOn ? "🔦" : "🔦"}
+            🔦
           </AppText>
         </TouchableOpacity>
       )}
 
       {/* Scanner Frame */}
-      <View style={[styles.scannerFrame, barcodeMode && styles.scannerFrameBarcode]}>
-        <View style={[styles.corner, styles.topLeft, { borderColor: cornerColor }]} />
-        <View style={[styles.corner, styles.topRight, { borderColor: cornerColor }]} />
-        <View style={[styles.corner, styles.bottomLeft, { borderColor: cornerColor }]} />
-        <View style={[styles.corner, styles.bottomRight, { borderColor: cornerColor }]} />
-      </View>
+      {scanMode !== "manual" && (
+        <View style={scanMode === "barcode" ? styles.barcodeTargetFrame : styles.scannerFrame}>
+          <View style={[styles.corner, styles.topLeft, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.topRight, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.bottomLeft, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.bottomRight, { borderColor: cornerColor }]} />
+        </View>
+      )}
 
-      {/* Mode Toggle */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleBtn, !barcodeMode && styles.toggleActive]}
-          onPress={() => { setBarcodeMode(false); setPrediction(null); setBarcodeBuffer([]); setIsLocked(false); }}
-        >
-          <AppText style={[styles.toggleText, !barcodeMode && styles.toggleTextActive]}>
-            Product Scan
-          </AppText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleBtn, barcodeMode && styles.toggleActive]}
-          onPress={() => { setBarcodeMode(true); setPrediction(null); setBarcodeBuffer([]); setIsLocked(false); }}
-        >
-          <AppText style={[styles.toggleText, barcodeMode && styles.toggleTextActive]}>
-            Barcode
-          </AppText>
-        </TouchableOpacity>
-      </View>
 
       {/* ─── Verification Overlay (Barcode Mode Only) ─── */}
       {scanMode === "barcode" && verificationProgress.active && (
@@ -402,19 +407,19 @@ export default function ScanScreen({ navigation, route }) {
                         style={{ maxHeight: 200 }}
                         renderItem={({ item }) => (
                           <TouchableOpacity
-                            style={[styles.dropdownRow, item.stock <= 0 && styles.outOfStockRow]}
+                            style={[styles.dropdownRow, (item.stock !== null && item.stock <= 0) && styles.outOfStockRow]}
                             onPress={() => handleManualSelect(item)}
-                            disabled={item.stock <= 0}
+                            disabled={item.stock !== null && item.stock <= 0}
                           >
                             <View style={{ flex: 1 }}>
-                              <AppText font="semibold" style={{ color: item.stock <= 0 ? "#999" : "#111" }}>
+                              <AppText font="semibold" style={{ color: (item.stock !== null && item.stock <= 0) ? "#999" : "#111" }}>
                                 {item.name || item.product_name || item.productName || "Unknown"}
                               </AppText>
-                              <AppText style={{ color: item.stock <= 0 ? "#E53935" : "#666", fontSize: 12 }}>
-                                {item.stock <= 0 ? "Out of Stock" : `${item.stock} in stock`}
+                              <AppText style={{ color: (item.stock !== null && item.stock <= 0) ? "#E53935" : "#666", fontSize: 12 }}>
+                                {(item.stock !== null && item.stock <= 0) ? "Out of Stock" : `${item.stock === null ? "Infinite" : item.stock} in stock`}
                               </AppText>
                             </View>
-                            <AppText font="bold" style={{ color: item.stock <= 0 ? "#999" : "#2254C5" }}>
+                            <AppText font="bold" style={{ color: (item.stock !== null && item.stock <= 0) ? "#999" : "#2254C5" }}>
                               ₹{Number(item.price).toFixed(2)}
                             </AppText>
                           </TouchableOpacity>
@@ -443,7 +448,7 @@ export default function ScanScreen({ navigation, route }) {
             <ScrollView showsVerticalScrollIndicator={false} style={styles.cartList}>
               {scannedItems.length === 0 ? (
                 <AppText style={styles.emptyCartText}>
-                  Point camera at a barcode to scan.
+                  {scanMode === "barcode" ? "Point camera at a barcode to scan." : "Search and add products."}
                 </AppText>
               ) : (
                 scannedItems.map((item, idx) => (
@@ -512,7 +517,7 @@ export default function ScanScreen({ navigation, route }) {
                 </AppText>
               )}
               <TouchableOpacity
-                onPress={() => { setBarcodeMode(true); setPrediction(null); setIsLocked(false); }}
+                onPress={() => switchMode("barcode")}
               >
                 <AppText font="semibold" style={styles.manual}>
                   Switch to Barcode Scan
@@ -522,24 +527,7 @@ export default function ScanScreen({ navigation, route }) {
           </>
         )}
       </View>
-      {/* Floating UI Elements (Top Level) */}
-      <TouchableOpacity
-        style={styles.closeBtn}
-        onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
-      >
-        <AppText style={{ fontSize: 18 }}>✕</AppText>
-      </TouchableOpacity>
 
-      {scanMode === "barcode" && (
-        <TouchableOpacity
-          style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
-          onPress={() => setTorchOn(!torchOn)}
-        >
-          <AppText style={{ color: torchOn ? "#000" : "#FFF", fontSize: 18 }}>
-            🔦
-          </AppText>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -798,6 +786,5 @@ const styles = StyleSheet.create({
     padding: 16,
     textAlign: "center",
     color: "#888",
-    fontStyle: "italic",
   },
 });

@@ -120,6 +120,10 @@ export default function InventoryScreen({ navigation, route }) {
       setStock("");
       setBarcode("");
       setShowAdd(false);
+    } catch (err) {
+      Alert.alert("Error", err.response?.data?.error || err.message);
+    }
+  }; 
 
       const handleDeleteProduct = (id) => {
         Alert.alert(
@@ -213,6 +217,7 @@ export default function InventoryScreen({ navigation, route }) {
                   setFilteredProducts([]);
                 }
                 setShowAdd(!showAdd);
+                
               }}
             >
               <AppText font="satoshi" style={s.addText}>
@@ -373,19 +378,13 @@ export default function InventoryScreen({ navigation, route }) {
                         style={s.iconBtn}
                         onPress={() => startEdit(item)}
                       >
-                        <Image
-                          source={require("../../assets/icons/Edit.png")}
-                          style={[s.iconImg, { tintColor: ACCENT }]}
-                        />
+                        <AppText style={{ color: ACCENT, fontSize: 16 }}>✏️</AppText>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={s.iconBtn}
                         onPress={() => handleDeleteProduct(item.id)}
                       >
-                        <Image
-                          source={require("../../assets/icons/Delete.png")}
-                          style={[s.iconImg, { tintColor: DANGER }]}
-                        />
+                       <AppText style={{ color: DANGER, fontSize: 16 }}>🗑️</AppText>
                       </TouchableOpacity>
                     </View>
                   </View>
