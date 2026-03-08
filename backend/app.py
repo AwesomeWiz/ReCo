@@ -6,6 +6,7 @@ from routes.auth import auth_bp
 from routes.sales import sales_bp
 from routes.inventory import inventory_bp
 from routes.manufacturer import manufacturer_bp
+from routes.classify import classify_bp
 
 load_dotenv()
 
@@ -16,6 +17,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(sales_bp)
 app.register_blueprint(inventory_bp)
 app.register_blueprint(manufacturer_bp)
+app.register_blueprint(classify_bp)
 
 @app.route("/")
 def home():

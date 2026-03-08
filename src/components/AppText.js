@@ -6,6 +6,7 @@ export default function AppText({
   children,
   style,
   font = "regular",
+  ...props
 }) {
   return (
     <Text
@@ -13,6 +14,7 @@ export default function AppText({
         { fontFamily: fonts[font] || fonts.regular },
         style,
       ]}
+      {...props}
     >
       {children}
     </Text>

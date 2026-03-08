@@ -7,3 +7,6 @@ statsmodels
 python-dotenv
 PyJWT
 cryptography
+Pillow
+ai-edge-litert
+numpy

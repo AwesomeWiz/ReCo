@@ -1,19 +1,16 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
-import { useTensorflowModel } from "react-native-fast-tflite";
 import AppText from "../components/AppText";
-import classNames from "../data/class_names.json";
-import api from "../api/api"; // Added the missing API import
+import api from "../api/api";
 
 export default function ScanScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -21,64 +18,85 @@ export default function ScanScreen({ navigation, route }) {
   const [prediction, setPrediction] = useState(null);
   const [barcodeMode, setBarcodeMode] = useState(false);
   const [barcodeBuffer, setBarcodeBuffer] = useState([]);
+  const [isLocked, setIsLocked] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+
+  // Stable refs — avoid stale closure problems in the scan loop
+  const isAnalyzingRef = useRef(false);
+  const isLockedRef = useRef(false);
+  const barcodeModeRef = useRef(false);
+  const cameraReadyRef = useRef(false);
   const cameraRef = useRef(null);
 
-  const model = useTensorflowModel(
-    require("../../assets/models/fmcg_classifier.tflite")
-  );
-  const isModelReady = model.state === "loaded";
+  // Keep refs in sync with state so the scan loop always reads fresh values
+  useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
+  useEffect(() => { barcodeModeRef.current = barcodeMode; }, [barcodeMode]);
+  useEffect(() => { cameraReadyRef.current = cameraReady; }, [cameraReady]);
 
-  // ─── AI Product Identification ───────────────────────────────────────────
-  const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || isAnalyzing || !isModelReady) return;
+  // ─── AI Product Identification via backend /classify ──────────────────────
+  const runInference = useCallback(async () => {
+    if (
+      !cameraRef.current ||
+      !cameraReadyRef.current ||
+      isAnalyzingRef.current ||
+      isLockedRef.current ||
+      barcodeModeRef.current
+    ) return;
+
+    isAnalyzingRef.current = true;
     setIsAnalyzing(true);
-    setPrediction(null);
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({ base64: false });
+      // Capture photo
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: false,
+        skipProcessing: true,
+      });
 
+      // Resize to 224x224 and get base64 (sent to backend for proper decoding)
       const resized = await ImageManipulator.manipulateAsync(
         photo.uri,
         [{ resize: { width: 224, height: 224 } }],
         { format: "jpeg", base64: true }
       );
 
-      const b64 = resized.base64;
-      const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      // Send to backend — Python PIL does the correct JPEG decode + normalize
+      const res = await api.post("/classify", { image: resized.base64 });
+      const { productName, confidence } = res.data;
 
-      const inputData = new Float32Array(224 * 224 * 3);
-      let pixelIdx = 0;
-      for (let i = 0; i < raw.length; i += 4) {
-        inputData[pixelIdx++] = raw[i] / 255;
-        inputData[pixelIdx++] = raw[i + 1] / 255;
-        inputData[pixelIdx++] = raw[i + 2] / 255;
+      setPrediction({ productName, confidence });
+
+      if (confidence >= 0.85) {
+        setIsLocked(true);
+        isLockedRef.current = true;
       }
-
-      const outputs = model.model.runSync([inputData]);
-      const scores = outputs[0];
-
-      let maxIdx = 0;
-      let maxVal = scores[0];
-      for (let i = 1; i < scores.length; i++) {
-        if (scores[i] > maxVal) { maxVal = scores[i]; maxIdx = i; }
-      }
-
-      let maxRaw = scores[0];
-      for (let i = 1; i < scores.length; i++) {
-        if (scores[i] > maxRaw) maxRaw = scores[i];
-      }
-      let sumExp = 0;
-      for (let i = 0; i < scores.length; i++) { sumExp += Math.exp(scores[i] - maxRaw); }
-      const confidence = Math.exp(scores[maxIdx] - maxRaw) / sumExp;
-
-      const name = classNames[maxIdx] || "Unknown";
-      setPrediction({ productName: name, confidence });
     } catch (e) {
-      Alert.alert("Analysis Error", "Failed to analyze the photo. Please try again.");
+      // Silently skip transient camera / network errors
+      console.log("Scan attempt skipped:", e?.message);
     } finally {
+      isAnalyzingRef.current = false;
       setIsAnalyzing(false);
     }
-  }, [isAnalyzing, isModelReady, model]);
+  }, []);
+
+  // ─── Continuous scanning loop ──────────────────────────────────────
+  // Starts 2s after the camera is ready, waits for each capture before the next
+  useEffect(() => {
+    if (barcodeMode || isLocked || !cameraReady) return;
+
+    let active = true;
+    const loop = async () => {
+      // Give camera 2 s to fully settle (autofocus, exposure)
+      await new Promise((res) => setTimeout(res, 2000));
+      while (active && !isLockedRef.current && !barcodeModeRef.current) {
+        await runInference();
+        await new Promise((res) => setTimeout(res, 1200));
+      }
+    };
+    loop();
+
+    return () => { active = false; };
+  }, [barcodeMode, isLocked, cameraReady, runInference]);
 
   // ─── Confirm prediction → navigate ───────────────────────────────────────
   const handleConfirm = () => {
@@ -204,7 +222,7 @@ export default function ScanScreen({ navigation, route }) {
   }
 
   const confidencePct = prediction ? `${Math.round(prediction.confidence * 100)}%` : null;
-  const isDetected = !!prediction && !barcodeMode;
+  const isDetected = isLocked && !barcodeMode;
   const cornerColor = isDetected ? "#2EFF00" : "#FFFFFF";
 
   return (
@@ -215,6 +233,7 @@ export default function ScanScreen({ navigation, route }) {
         style={styles.camera}
         facing="back"
         enableTorch={torchOn}
+        onCameraReady={() => setCameraReady(true)}
         onBarcodeScanned={barcodeMode ? handleBarcodeScanned : undefined}
         barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
       />
@@ -251,7 +270,7 @@ export default function ScanScreen({ navigation, route }) {
       <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[styles.toggleBtn, !barcodeMode && styles.toggleActive]}
-          onPress={() => { setBarcodeMode(false); setPrediction(null); setBarcodeBuffer([]); }}
+          onPress={() => { setBarcodeMode(false); setPrediction(null); setBarcodeBuffer([]); setIsLocked(false); }}
         >
           <AppText style={[styles.toggleText, !barcodeMode && styles.toggleTextActive]}>
             Product Scan
@@ -259,7 +278,7 @@ export default function ScanScreen({ navigation, route }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, barcodeMode && styles.toggleActive]}
-          onPress={() => { setBarcodeMode(true); setPrediction(null); setBarcodeBuffer([]); }}
+          onPress={() => { setBarcodeMode(true); setPrediction(null); setBarcodeBuffer([]); setIsLocked(false); }}
         >
           <AppText style={[styles.toggleText, barcodeMode && styles.toggleTextActive]}>
             Barcode
@@ -332,15 +351,10 @@ export default function ScanScreen({ navigation, route }) {
               <AppText font="semibold" style={styles.reviewBtnText}>Review Order</AppText>
             </TouchableOpacity>
           </View>
-        ) : !isModelReady ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#2254C5" />
-            <AppText style={styles.loadingText}>Loading model…</AppText>
-          </View>
         ) : (
           <>
             <AppText font="regular" style={styles.detected}>
-              {isAnalyzing ? "Analyzing…" : prediction ? "Detected" : "Point camera at a product"}
+              {isLocked ? "Detected" : "Scanning..."}
             </AppText>
 
             <AppText font="semibold" style={styles.product}>
@@ -353,33 +367,31 @@ export default function ScanScreen({ navigation, route }) {
               </AppText>
             )}
 
-            {/* Capture / Confirm button */}
+            {/* Confirm button */}
             <TouchableOpacity
-              style={[styles.scanBtn, (isAnalyzing || !isModelReady) && styles.scanBtnDisabled]}
-              onPress={prediction ? handleConfirm : handleCapture}
-              disabled={isAnalyzing}
+              style={[styles.scanBtn, !isLocked && styles.scanBtnDisabled]}
+              onPress={isLocked ? handleConfirm : null}
+              disabled={!isLocked}
             >
-              {isAnalyzing ? (
-                <ActivityIndicator color="#fff" size="large" />
-              ) : (
-                <Image
-                  source={require("../../assets/icons/Scan.png")}
-                  style={styles.scanIcon}
-                />
-              )}
+              <Image
+                source={require("../../assets/icons/Scan.png")}
+                style={styles.scanIcon}
+              />
             </TouchableOpacity>
 
             <View style={styles.fallback}>
-              <AppText style={styles.wrong}>
-                {prediction ? "Not this product?" : "Wrong Product?"}
-              </AppText>
-              <AppText
-                font="semibold"
-                style={styles.manual}
-                onPress={() => { setBarcodeMode(true); setPrediction(null); }}
+              {prediction && (
+                <AppText style={styles.wrong}>
+                  Not this product?
+                </AppText>
+              )}
+              <TouchableOpacity
+                onPress={() => { setBarcodeMode(true); setPrediction(null); setIsLocked(false); }}
               >
-                Switch to Barcode Scan
-              </AppText>
+                <AppText font="semibold" style={styles.manual}>
+                  Switch to Barcode Scan
+                </AppText>
+              </TouchableOpacity>
             </View>
           </>
         )}
