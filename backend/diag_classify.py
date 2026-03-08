@@ -75,14 +75,12 @@ def test_inference(interpreter, class_names):
         interpreter.invoke()
         scores = interpreter.get_tensor(output_details[0]["index"])[0]
         
-        # Softmax
-        scores = scores.astype(np.float64)
-        scores -= scores.max()
-        probs = np.exp(scores) / np.exp(scores).sum()
+        # 5. Get probabilities (model already has Softmax)
+        probs = scores.astype(np.float64)
         
         best_idx = int(np.argmax(probs))
         pred_name = class_names[best_idx] if best_idx < len(class_names) else f"unknown_{best_idx}"
-        print(f"Prediction for dummy white image: {pred_name} (Confidence: {probs[best_idx]:.2f})")
+        print(f"Prediction: {pred_name} (Confidence: {probs[best_idx]:.2f})")
         
         # Test with a different color (black)
         print("\n--- Testing Black Image ---")

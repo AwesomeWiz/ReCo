@@ -108,11 +108,8 @@ def classify_product():
         _interpreter.invoke()
         scores = _interpreter.get_tensor(output_details[0]["index"])[0]  # (num_classes,)
 
-        # 5. Softmax over raw logits
-        scores = scores.astype(np.float64)
-        scores -= scores.max()   # numerical stability
-        exp_scores = np.exp(scores)
-        probs = exp_scores / exp_scores.sum()
+        # 5. Get probabilities (model already has Softmax)
+        probs = scores.astype(np.float64)
 
         best_idx = int(np.argmax(probs))
         confidence = float(probs[best_idx])
