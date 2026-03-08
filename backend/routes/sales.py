@@ -82,10 +82,46 @@ def add_item_to_transaction(user_id):
         if not txn:
             return jsonify({"error": "Invalid or completed transaction"}), 400
 
-        # ── Insert sale record ──
-        cur.execute("""
-            INSERT INTO sales (
-                shop_id,
+        # ── Check if item already exists in this transaction ──
+        if barcode:
+            cur.execute("""
+                SELECT id, quantity, total FROM sales 
+                WHERE transaction_id = %s AND barcode = %s
+            """, (transaction_id, barcode))
+        else:
+            cur.execute("""
+                SELECT id, quantity, total FROM sales 
+                WHERE transaction_id = %s AND product_name = %s AND barcode IS NULL
+            """, (transaction_id, product_name))
+        
+        existing_item = cur.fetchone()
+
+        if existing_item:
+            # ── Update existing record ──
+            new_qty = existing_item["quantity"] + quantity
+            new_total = float(existing_item["total"]) + total
+            
+            cur.execute("""
+                UPDATE sales 
+                SET quantity = %s, total = %s 
+                WHERE id = %s
+            """, (new_qty, new_total, existing_item["id"]))
+        else:
+            # ── Insert new sale record ──
+            cur.execute("""
+                INSERT INTO sales (
+                    shop_id,
+                    product_name,
+                    category,
+                    barcode,
+                    price,
+                    quantity,
+                    total,
+                    transaction_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                user_id,
                 product_name,
                 category,
                 barcode,
@@ -93,18 +129,7 @@ def add_item_to_transaction(user_id):
                 quantity,
                 total,
                 transaction_id
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            user_id,
-            product_name,
-            category,
-            barcode,
-            price,
-            quantity,
-            total,
-            transaction_id
-        ))
+            ))
 
         # ── Update transaction total ──
         cur.execute("""

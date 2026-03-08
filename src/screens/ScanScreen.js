@@ -81,6 +81,7 @@ export default function ScanScreen({ navigation, route }) {
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1.0,
+        shutterSound: false,
       });
 
       // Resize to 224x224 and get base64 (sent to backend for proper decoding)
