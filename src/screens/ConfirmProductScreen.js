@@ -369,6 +369,18 @@ export default function ConfirmProductScreen({ route, navigation }) {
             >
               <AppText style={styles.btnText}>Checkout All Items</AppText>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.checkoutBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: "#E53935", marginTop: 10 }]}
+              onPress={() => {
+                Alert.alert("Clear Cart", "Are you sure you want to remove all items from your cart?", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Clear", onPress: () => clearCart(), style: "destructive" }
+                ]);
+              }}
+            >
+              <AppText font="bold" style={{ color: "#E53935" }}>Clear Cart</AppText>
+            </TouchableOpacity>
           </View>
         )}
 

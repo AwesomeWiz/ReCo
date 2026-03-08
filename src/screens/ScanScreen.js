@@ -32,7 +32,7 @@ export default function ScanScreen({ navigation, route }) {
   const [barcodeBuffer, setBarcodeBuffer] = useState([]);
   const [isLocked, setIsLocked] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const { transactionId, cartItems, setTransactionId, setCartItems } = useContext(CartContext);
+  const { transactionId, cartItems, setTransactionId, setCartItems, clearCart } = useContext(CartContext);
 
   // New UI states merged in
   const [searchQuery, setSearchQuery] = useState("");
@@ -389,7 +389,10 @@ export default function ScanScreen({ navigation, route }) {
       {/* Floating UI Elements (Top Level) */}
       <TouchableOpacity
         style={styles.closeBtn}
-        onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
+        onPress={() => {
+          clearCart();
+          navigation.navigate("Main", { screen: "Dashboard" });
+        }}
       >
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
