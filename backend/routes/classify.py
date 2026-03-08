@@ -4,6 +4,8 @@ import json
 import numpy as np
 from io import BytesIO
 from flask import Blueprint, request, jsonify
+from utils.jwt_auth import token_required
+from db import get_connection
 
 # PIL for proper JPEG decoding
 try:
@@ -30,29 +32,27 @@ except ImportError:
 
 classify_bp = Blueprint("classify", __name__)
 
-# ─── Load model & class names once at import time ────────────────────────────
+# ─── Load model & mappings once at import time ───────────────────────────────
 _BASE = os.path.dirname(__file__)   # routes/
 _BACKEND = os.path.dirname(_BASE)   # backend/
 
 MODEL_PATH = os.path.join(_BACKEND, "fmcg_classifier.tflite")
-CLASS_NAMES_PATH = os.path.join(_BACKEND, "class_names.json")
+LABEL_MAPPING_PATH = os.path.join(_BACKEND, "labelMapping.json")
+CLASS_NAMES_PATH = os.path.join(_BACKEND, "class_names.json") # Fallback or slug mapping
 
 _interpreter = None
+_label_mapping = {}
 _class_names = []
 
 def _load_model():
-    global _interpreter, _class_names
+    global _interpreter, _label_mapping, _class_names
 
     if not os.path.exists(MODEL_PATH):
         print(f"[classify] WARNING: Model not found at {MODEL_PATH}")
         return
 
     if tflite is None:
-        print("[classify] WARNING: No TFLite runtime available. Install tflite-runtime or tensorflow.")
-        return
-
-    if Image is None:
-        print("[classify] WARNING: Pillow not installed. Run: pip install Pillow")
+        print("[classify] WARNING: No TFLite runtime available.")
         return
 
     try:
@@ -63,69 +63,107 @@ def _load_model():
         print(f"[classify] ERROR loading model: {e}")
         _interpreter = None
 
+    if os.path.exists(LABEL_MAPPING_PATH):
+        with open(LABEL_MAPPING_PATH, "r") as f:
+            data = json.load(f)
+            _label_mapping = data.get("product_names", {})
+        print(f"[classify] Loaded {len(_label_mapping)} display labels")
+
     if os.path.exists(CLASS_NAMES_PATH):
         with open(CLASS_NAMES_PATH, "r") as f:
             _class_names = json.load(f)
-        print(f"[classify] Loaded {len(_class_names)} class names")
-    else:
-        print(f"[classify] WARNING: class_names.json not found at {CLASS_NAMES_PATH}")
+        print(f"[classify] Loaded {len(_class_names)} internal class slugs")
 
 _load_model()
 
 
 # ─── /classify endpoint ───────────────────────────────────────────────────────
 @classify_bp.route("/classify", methods=["POST"])
-def classify_product():
+@token_required
+def classify_product(user_id):
     """
-    Body: { "image": "<base64-encoded JPEG string>" }
-    Returns: { "productName": "...", "confidence": 0.97 }
+    Body: { "image": "<base64>" }
+    Returns inventory details if product is found in shop's stock.
     """
     if _interpreter is None:
-        return jsonify({"error": "Model not loaded on server"}), 503
-    if Image is None:
-        return jsonify({"error": "Pillow not installed on server"}), 503
+        return jsonify({"error": "Model not loaded"}), 503
 
     data = request.get_json(silent=True)
     if not data or "image" not in data:
-        return jsonify({"error": "Missing 'image' field"}), 400
+        return jsonify({"error": "Missing image"}), 400
 
     try:
-        # 1. Decode base64 → raw bytes → PIL Image
+        # 1. Decode & Preprocess
         img_bytes = base64.b64decode(data["image"])
         img = Image.open(BytesIO(img_bytes)).convert("RGB")
-
-        # 2. Resize to 224×224 (what the model expects)
         img = img.resize((224, 224), Image.BILINEAR)
+        img_array = np.array(img, dtype=np.float32)
+        img_array = np.expand_dims(img_array, axis=0)
 
-        # 3. Convert to float32 (EfficientNet expects [0, 255] range, NOT normalized)
-        img_array = np.array(img, dtype=np.float32)           # shape: (224, 224, 3)
-        img_array = np.expand_dims(img_array, axis=0)         # shape: (1, 224, 224, 3)
-
-        # 4. Run inference
+        # 2. Inference
         input_details = _interpreter.get_input_details()
         output_details = _interpreter.get_output_details()
         _interpreter.set_tensor(input_details[0]["index"], img_array)
         _interpreter.invoke()
-        scores = _interpreter.get_tensor(output_details[0]["index"])[0]  # (num_classes,)
+        scores = _interpreter.get_tensor(output_details[0]["index"])[0]
 
-        # 5. Get probabilities (model already has Softmax)
         probs = scores.astype(np.float64)
-
         best_idx = int(np.argmax(probs))
         confidence = float(probs[best_idx])
-        product_name = _class_names[best_idx] if best_idx < len(_class_names) else f"class_{best_idx}"
 
-        # Debug logging for identification issues
-        print(f"[classify] Prediction: {product_name} ({confidence:.2f})")
-        top_indices = np.argsort(probs)[-3:][::-1]
-        for i in top_indices:
-            name = _class_names[i] if i < len(_class_names) else f"class_{i}"
-            print(f"  - {name}: {probs[i]:.4f}")
+        # 3. Map Index to Name
+        # Based on analysis, Model Index i matches labelMapping Key str(i)
+        # However, labelMapping starts at "1", and class_names[1] matches Key "1"
+        # So it's safe to assume: name = mapping[str(best_idx)]
+        identifer = str(best_idx)
+        display_name = _label_mapping.get(identifer)
+        
+        # Fallback to slugs if mapping is missing
+        if not display_name:
+             display_name = _class_names[best_idx] if best_idx < len(_class_names) else f"Product_{best_idx}"
+             # Clean up underscores for searching if needed
+             display_name = display_name.replace("_", " ")
 
-        return jsonify({
-            "productName": product_name,
+        # 4. Inventory Lookup (Database source of truth)
+        conn = get_connection()
+        cur = conn.cursor()
+        
+        # We search by name. The identified display_name should match product_name in inventory.
+        cur.execute("""
+            SELECT product_name, category, price, stock, barcode
+            FROM inventory
+            WHERE shop_id = %s AND product_name = %s
+            LIMIT 1
+        """, (user_id, display_name))
+        
+        inv_item = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        result = {
+            "productName": display_name,
             "confidence": confidence,
-        })
+            "inInventory": False,
+            "price": 0,
+            "category": "",
+            "stock": 0,
+            "barcode": None
+        }
+
+        if inv_item:
+            result.update({
+                "inInventory": True,
+                "productName": inv_item["product_name"], # Use exact DB name
+                "price": float(inv_item["price"]),
+                "category": inv_item["category"],
+                "stock": inv_item["stock"],
+                "barcode": inv_item["barcode"]
+            })
+
+        print(f"[classify] shop:{user_id} pred:{display_name} ({confidence:.2f}) inInv:{result['inInventory']}")
+
+        return jsonify(result)
 
     except Exception as e:
+        print(f"[classify] error: {e}")
         return jsonify({"error": str(e)}), 500

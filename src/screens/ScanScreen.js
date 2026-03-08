@@ -92,9 +92,7 @@ export default function ScanScreen({ navigation, route }) {
 
       // Send to backend — Python PIL does the correct JPEG decode + normalize
       const res = await api.post("/classify", { image: resized.base64 });
-      const { productName, confidence } = res.data;
-
-      setPrediction({ productName, confidence });
+      setPrediction(res.data);
 
       if (confidence >= 0.25) {
         setIsLocked(true);
@@ -159,11 +157,7 @@ export default function ScanScreen({ navigation, route }) {
   const handleConfirm = () => {
     if (!prediction) return;
     navigation.navigate("ConfirmProduct", {
-      prediction: {
-        productName: prediction.productName,
-        category: "",
-        confidence: prediction.confidence,
-      },
+      prediction: prediction,
     });
   };
 

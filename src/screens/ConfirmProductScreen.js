@@ -248,8 +248,9 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.checkoutBtn, styles.confirmBtn]}
+                  style={[styles.checkoutBtn, styles.confirmBtn, (isOutOfStock || product.inInventory === false) && { backgroundColor: "#ccc" }]}
                   onPress={handleAddItem}
+                  disabled={isOutOfStock || product.inInventory === false}
                 >
                   <AppText style={styles.btnText}>Checkout</AppText>
                 </TouchableOpacity>
@@ -271,7 +272,13 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 </AppText>
               )}
 
-              {isOutOfStock ? (
+              {product.inInventory === false ? (
+                <View style={styles.outOfStockBanner}>
+                  <AppText style={styles.outOfStockText}>
+                    ⚠ This product is not in your inventory list. Please add it to inventory first to sell it.
+                  </AppText>
+                </View>
+              ) : isOutOfStock ? (
                 <View style={styles.outOfStockBanner}>
                   <AppText style={styles.outOfStockText}>
                     ⚠ This product is out of stock and cannot be added to the cart.
@@ -308,10 +315,11 @@ export default function ConfirmProductScreen({ route, navigation }) {
                   </AppText>
 
                   <TouchableOpacity
-                    style={styles.addBtn}
+                    style={[styles.addBtn, (isOutOfStock || product.inInventory === false) && { backgroundColor: "#ccc" }]}
                     onPress={handleAddItem}
+                    disabled={isOutOfStock || product.inInventory === false}
                   >
-                    <AppText style={styles.btnText}>
+                    <AppText font="bold" style={styles.btnText}>
                       Add to Cart
                     </AppText>
                   </TouchableOpacity>
