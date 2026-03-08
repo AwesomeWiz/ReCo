@@ -334,6 +334,36 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
         </View>
 
+        {/* --- Global Cart Section (Shown even in Single Product Mode) --- */}
+        {!isCartFlow && cartItems.length > 0 && (
+          <View style={styles.cartCard}>
+            <AppText font="bold" style={[styles.label, { color: ACCENT, marginBottom: 12 }]}>
+              Current Cart
+            </AppText>
+
+            {cartItems.map((item, idx) => (
+              <View key={idx} style={styles.cartRow}>
+                <AppText style={{ flex: 1 }}>{item.qty}x {item.description}</AppText>
+                <AppText>₹{item.amount.toFixed(2)}</AppText>
+              </View>
+            ))}
+
+            <View style={styles.divider} />
+
+            <View style={styles.cartRow}>
+              <AppText font="bold">Cart Total</AppText>
+              <AppText font="bold" style={{ color: ACCENT }}>₹{cartTotal.toFixed(2)}</AppText>
+            </View>
+
+            <TouchableOpacity
+              style={styles.checkoutBtn}
+              onPress={handleCheckout}
+            >
+              <AppText style={styles.btnText}>Checkout All Items</AppText>
+            </TouchableOpacity>
+          </View>
+        )}
+
       </ScrollView>
 
       {/* ─── Loading Overlay Modal ─── */}
