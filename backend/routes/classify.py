@@ -118,6 +118,13 @@ def classify_product():
         confidence = float(probs[best_idx])
         product_name = _class_names[best_idx] if best_idx < len(_class_names) else f"class_{best_idx}"
 
+        # Debug logging for identification issues
+        print(f"[classify] Prediction: {product_name} ({confidence:.2f})")
+        top_indices = np.argsort(probs)[-3:][::-1]
+        for i in top_indices:
+            name = _class_names[i] if i < len(_class_names) else f"class_{i}"
+            print(f"  - {name}: {probs[i]:.4f}")
+
         return jsonify({
             "productName": product_name,
             "confidence": confidence,

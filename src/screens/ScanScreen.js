@@ -76,10 +76,8 @@ export default function ScanScreen({ navigation, route }) {
     setIsAnalyzing(true);
 
     try {
-      // Capture photo
       const photo = await cameraRef.current.takePictureAsync({
-        base64: false,
-        skipProcessing: true,
+        quality: 1.0,
       });
 
       // Resize to 224x224 and get base64 (sent to backend for proper decoding)
@@ -100,8 +98,8 @@ export default function ScanScreen({ navigation, route }) {
         isLockedRef.current = true;
       }
     } catch (e) {
-      // Silently skip transient camera / network errors
-      console.log("Scan attempt skipped:", e?.message);
+      // Detailed logging for debugging
+      console.log("Scan attempt skipped:", e?.message || "Unknown error", e);
     } finally {
       isAnalyzingRef.current = false;
       setIsAnalyzing(false);
