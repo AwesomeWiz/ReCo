@@ -29,6 +29,9 @@ export default function ConfirmProductScreen({ route, navigation }) {
   const [quantity, setQuantity] = useState(1);
   const [upiId, setUpiId] = useState("");
   const [storeName, setStoreName] = useState("My Store");
+  const [finalTotal, setFinalTotal] = useState(0);
+  const [showNotFound, setShowNotFound] = useState(false);
+  const [notFoundMsg, setNotFoundMsg] = useState("");
 
   const {
     transactionId,
@@ -88,17 +91,13 @@ export default function ConfirmProductScreen({ route, navigation }) {
           confidence: 1.0,
         });
       } else {
-        Alert.alert(
-          "Product Not Found",
-          res.data.message || "No product with this barcode exists in your inventory.",
-          [{ text: "OK", onPress: () => navigation.goBack() }]
-        );
+        setNotFoundMsg(res.data.message || "No product with this barcode exists in your inventory.");
+        setShowNotFound(true);
       }
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.message;
-      Alert.alert("Lookup Failed", errorMsg, [
-        { text: "OK", onPress: () => navigation.goBack() }
-      ]);
+      setNotFoundMsg(errorMsg || "An error occurred during barcode lookup.");
+      setShowNotFound(true);
     } finally {
       setLoading(false);
     }
@@ -158,6 +157,8 @@ export default function ConfirmProductScreen({ route, navigation }) {
       if (!isCartFlow) setQuantity(1);
 
       if (isCartFlow) {
+        // Capture total before clearing
+        setFinalTotal(cartModeTotal);
         // Complete the transaction seamlessly in 1-click
         await api.post("/transactions/complete", { transaction_id: activeId });
         setTransactionId(null);
@@ -177,13 +178,14 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
   const handleCheckout = async () => {
     try {
+      setFinalTotal(cartTotal);
       await api.post("/transactions/complete", {
         transaction_id: transactionId
       });
 
       setTransactionId(null);
       setCartItems([]);
-      navigation.navigate("Main");
+      setShowSuccess(true); // Show success modal even for checkout all
 
     } catch (err) {
       alert("Checkout failed");
@@ -242,7 +244,10 @@ export default function ConfirmProductScreen({ route, navigation }) {
               <View style={styles.checkoutBtnRow}>
                 <TouchableOpacity
                   style={[styles.checkoutBtn, styles.cancelBtn]}
-                  onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
+                  onPress={() => {
+                    clearCart();
+                    navigation.navigate("Main", { screen: "Dashboard" });
+                  }}
                 >
                   <AppText style={[styles.btnText, { color: "#333" }]}>Cancel</AppText>
                 </TouchableOpacity>
@@ -417,18 +422,18 @@ export default function ConfirmProductScreen({ route, navigation }) {
             <AppText style={styles.modalText}>Your transaction has been successfully recorded.</AppText>
 
             {/* ─── UPI Payment QR Code ─── */}
-            {isCartFlow && upiId ? (
+            {(isCartFlow || finalTotal > 0) && upiId ? (
               <View style={styles.qrContainer}>
                 <AppText style={styles.qrTitle}>Pay via UPI</AppText>
                 <View style={styles.qrWrapper}>
                   <QRCode
-                    value={`upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${cartModeTotal.toFixed(2)}&cu=INR`}
+                    value={`upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${finalTotal.toFixed(2)}&cu=INR`}
                     size={220}
                     color="#2254C5"
                     backgroundColor="white"
                   />
                 </View>
-                <AppText style={styles.qrSubtitle}>Total: ₹{cartModeTotal.toFixed(2)}</AppText>
+                <AppText style={styles.qrSubtitle}>Total: ₹{finalTotal.toFixed(2)}</AppText>
                 <AppText style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{upiId}</AppText>
               </View>
             ) : null}
@@ -441,6 +446,34 @@ export default function ConfirmProductScreen({ route, navigation }) {
               }}
             >
               <AppText font="bold" style={{ color: "#FFF", fontSize: 16 }}>Payment Complete</AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── Product Not Found Modal ─── */}
+      <Modal
+        visible={showNotFound}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={notFoundStyles.modalContainer}>
+          <View style={notFoundStyles.modalBox}>
+            <View style={notFoundStyles.modalIconContainer}>
+              <AppText style={{ fontSize: 24, color: "#FFF", fontWeight: "bold" }}>!</AppText>
+            </View>
+            <AppText font="bold" style={[notFoundStyles.modalTitle, { marginBottom: 20 }]}>
+              {notFoundMsg || "Product Not Found"}
+            </AppText>
+
+            <TouchableOpacity
+              style={notFoundStyles.modalBtn}
+              onPress={() => {
+                setShowNotFound(false);
+                navigation.goBack();
+              }}
+            >
+              <AppText font="bold" style={{ color: "#FFF", fontSize: 16 }}>Close</AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -677,4 +710,60 @@ const styles = StyleSheet.create({
     color: "#2254C5",
     fontWeight: "bold",
   }
+});
+
+const notFoundStyles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalBox: {
+    backgroundColor: "#FFF",
+    width: "85%",
+    borderRadius: 24,
+    padding: 30,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFC107",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+    shadowColor: "#FFC107",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: "#333",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  modalText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  modalBtn: {
+    backgroundColor: "#2254C5",
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
 });

@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Modal,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import AppText from "../components/AppText";
 import api from "../api/api";
 import labelData from "../data/labelMapping.json";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -123,533 +125,533 @@ export default function InventoryScreen({ navigation, route }) {
     } catch (err) {
       Alert.alert("Error", err.response?.data?.error || err.message);
     }
-  }; 
+  };
 
-      const handleDeleteProduct = (id) => {
-        Alert.alert(
-          "Remove Product",
-          "Are you sure you want to delete this product?",
-          [
-            { text: "No", style: "cancel" },
-            {
-              text: "Yes, Delete",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  await api.delete(`/inventory/${id}`);
-                  fetchInventory();
-                } catch (err) {
-                  Alert.alert("Error", "Could not delete product");
-                }
-              }
+  const handleDeleteProduct = (id) => {
+    Alert.alert(
+      "Remove Product",
+      "Are you sure you want to delete this product?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete(`/inventory/${id}`);
+              fetchInventory();
+            } catch (err) {
+              Alert.alert("Error", "Could not delete product");
             }
-          ]
-        );
-      };
-
-      const startEdit = (item) => {
-        setEditingItem(item);
-        setEditName(item.product_name);
-        setEditCategory(item.category || "");
-        setEditPrice(String(item.price));
-        setEditStock(String(item.stock));
-        setEditBarcode(item.barcode || "");
-        setShowEdit(true);
-      };
-
-      const handleUpdateProduct = async () => {
-        if (!editName || !editCategory) {
-          Alert.alert("Missing fields", "Please provide a name and category.");
-          return;
+          }
         }
+      ]
+    );
+  };
 
-        try {
-          await api.put(`/inventory/${editingItem.id}`, {
-            product_name: editName,
-            category: editCategory,
-            price: Number(editPrice),
-            stock: Number(editStock),
-            barcode: editBarcode || null
-          });
+  const startEdit = (item) => {
+    setEditingItem(item);
+    setEditName(item.product_name);
+    setEditCategory(item.category || "");
+    setEditPrice(String(item.price));
+    setEditStock(String(item.stock));
+    setEditBarcode(item.barcode || "");
+    setShowEdit(true);
+  };
 
-          Alert.alert("Success", "Product updated");
-          setShowEdit(false);
-          fetchInventory();
-        } catch (err) {
-          Alert.alert("Update Failed", err.response?.data?.error || err.message);
-        }
-      };
+  const handleUpdateProduct = async () => {
+    if (!editName || !editCategory) {
+      Alert.alert("Missing fields", "Please provide a name and category.");
+      return;
+    }
 
-      const handleSearch = (text) => {
-        setSearchQuery(text);
+    try {
+      await api.put(`/inventory/${editingItem.id}`, {
+        product_name: editName,
+        category: editCategory,
+        price: Number(editPrice),
+        stock: Number(editStock),
+        barcode: editBarcode || null
+      });
 
-        if (text.length === 0) {
-          setFilteredProducts([]);
-          return;
-        }
+      Alert.alert("Success", "Product updated");
+      setShowEdit(false);
+      fetchInventory();
+    } catch (err) {
+      Alert.alert("Update Failed", err.response?.data?.error || err.message);
+    }
+  };
 
-        const results = productList.filter((item) =>
-          item.toLowerCase().includes(text.toLowerCase())
-        );
+  const handleSearch = (text) => {
+    setSearchQuery(text);
 
-        setFilteredProducts(results.slice(0, 5));
-      };
+    if (text.length === 0) {
+      setFilteredProducts([]);
+      return;
+    }
 
-      return (
-        <SafeAreaView style={s.safe}>
-          <ScrollView contentContainerStyle={s.content}>
-            <AppText font="satoshi" style={s.title}>
-              Inventory
+    const results = productList.filter((item) =>
+      item.toLowerCase().includes(text.toLowerCase())
+    );
+
+    setFilteredProducts(results.slice(0, 5));
+  };
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <ScrollView contentContainerStyle={s.content}>
+        <AppText font="satoshi" style={s.title}>
+          Inventory
+        </AppText>
+
+        {/* ADD BUTTON */}
+        <TouchableOpacity
+          style={s.addBtn}
+          onPress={() => {
+            if (showAdd) {
+              // Clear all form fields when cancelling
+              setProductName("");
+              setSearchQuery("");
+              setCategory("");
+              setPrice("");
+              setStock("");
+              setBarcode("");
+              setFilteredProducts([]);
+            }
+            setShowAdd(!showAdd);
+
+          }}
+        >
+          <AppText font="satoshi" style={s.addText}>
+            {showAdd ? "Cancel" : "Add Product"}
+          </AppText>
+        </TouchableOpacity>
+
+        {/* ADD FORM */}
+        {showAdd && (
+          <View style={s.formCard}>
+            <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+              Product Name
             </AppText>
+            <TextInput
+              placeholder="Search or Enter Product Name"
+              style={s.input}
+              value={searchQuery}
+              onChangeText={handleSearch}
+            />
 
-            {/* ADD BUTTON */}
+            {filteredProducts.length > 0 && (
+              <View style={s.dropdown}>
+                {filteredProducts.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={s.dropdownItem}
+                    onPress={() => {
+                      setProductName(item);
+                      setSearchQuery(item);
+                      setFilteredProducts([]);
+                    }}
+                  >
+                    <AppText>{item}</AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* SCAN BARCODE BUTTON */}
             <TouchableOpacity
-              style={s.addBtn}
-              onPress={() => {
-                if (showAdd) {
-                  // Clear all form fields when cancelling
-                  setProductName("");
-                  setSearchQuery("");
-                  setCategory("");
-                  setPrice("");
-                  setStock("");
-                  setBarcode("");
-                  setFilteredProducts([]);
-                }
-                setShowAdd(!showAdd);
-                
-              }}
+              style={s.scanBarcodeBtn}
+              onPress={() =>
+                navigation.navigate("BarcodeScanner", { mode: "inventory" })
+              }
             >
-              <AppText font="satoshi" style={s.addText}>
-                {showAdd ? "Cancel" : "Add Product"}
+              <AppText style={s.scanBarcodeText}>
+                Scan Barcode
               </AppText>
             </TouchableOpacity>
 
-            {/* ADD FORM */}
-            {showAdd && (
-              <View style={s.formCard}>
-                <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
-                  Product Name
+            {barcode ? (
+              <AppText style={s.barcodeText}>
+                Barcode: {barcode}
+              </AppText>
+            ) : null}
+
+            {/* CATEGORY */}
+            <View style={s.categoryWrapper}>
+              <AppText style={{ marginBottom: 8, fontWeight: "600" }}>
+                Select Category
+              </AppText>
+
+              <View style={s.categoryRow}>
+                {CATEGORIES.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      s.categoryBtn,
+                      category === item && s.categorySelected,
+                    ]}
+                    onPress={() => setCategory(item)}
+                  >
+                    <AppText
+                      style={[
+                        s.categoryText,
+                        category === item && { color: "#fff" },
+                      ]}
+                    >
+                      {item}
+                    </AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+              Price
+            </AppText>
+            <TextInput
+              placeholder="Price"
+              keyboardType="numeric"
+              style={s.input}
+              value={price}
+              onChangeText={setPrice}
+            />
+            <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
+              Stock
+            </AppText>
+            <TextInput
+              placeholder="Stock"
+              keyboardType="numeric"
+              style={s.input}
+              value={stock}
+              onChangeText={setStock}
+            />
+
+            <TouchableOpacity style={s.saveBtn} onPress={handleAddProduct}>
+              <AppText font="satoshi" style={s.saveText}>
+                Save Product
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* INVENTORY LIST */}
+        {inventory.length === 0 ? (
+          <AppText style={s.empty}>
+            No products in inventory.
+          </AppText>
+        ) : (
+          inventory.map((item) => (
+            <View key={item.id} style={s.card}>
+              <View style={s.leftSection}>
+                <AppText font="semibold" style={s.productName}>
+                  {item.product_name}
                 </AppText>
-                <TextInput
-                  placeholder="Search or Enter Product Name"
-                  style={s.input}
-                  value={searchQuery}
-                  onChangeText={handleSearch}
-                />
 
-                {filteredProducts.length > 0 && (
-                  <View style={s.dropdown}>
-                    {filteredProducts.map((item, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={s.dropdownItem}
-                        onPress={() => {
-                          setProductName(item);
-                          setSearchQuery(item);
-                          setFilteredProducts([]);
-                        }}
-                      >
-                        <AppText>{item}</AppText>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                <AppText style={s.category}>
+                  {item.category}
+                </AppText>
 
-                {/* SCAN BARCODE BUTTON */}
-                <TouchableOpacity
-                  style={s.scanBarcodeBtn}
-                  onPress={() =>
-                    navigation.navigate("BarcodeScanner", { mode: "inventory" })
-                  }
-                >
-                  <AppText style={s.scanBarcodeText}>
-                    Scan Barcode
-                  </AppText>
-                </TouchableOpacity>
-
-                {barcode ? (
-                  <AppText style={s.barcodeText}>
-                    Barcode: {barcode}
+                {item.barcode ? (
+                  <AppText style={s.barcode}>
+                    {item.barcode}
                   </AppText>
                 ) : null}
 
-                {/* CATEGORY */}
-                <View style={s.categoryWrapper}>
-                  <AppText style={{ marginBottom: 8, fontWeight: "600" }}>
-                    Select Category
-                  </AppText>
+                <AppText style={s.price}>
+                  ₹{Number(item.price).toFixed(2)}
+                </AppText>
+              </View>
 
+              <View style={s.rightSection}>
+                <AppText
+                  style={[
+                    s.stock,
+                    item.stock <= 5 && item.stock > 0 && { color: DANGER },
+                    item.stock === 0 && {
+                      color: DANGER,
+                      fontWeight: "bold",
+                    },
+                  ]}
+                >
+                  Stock: {item.stock}
+                </AppText>
+
+                <View style={s.actionRow}>
+                  <TouchableOpacity
+                    style={s.iconBtn}
+                    onPress={() => startEdit(item)}
+                  >
+                    <MaterialCommunityIcons name="pencil-outline" size={22} color={ACCENT} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={s.iconBtn}
+                    onPress={() => handleDeleteProduct(item.id)}
+                  >
+                    <MaterialCommunityIcons name="trash-can-outline" size={22} color={DANGER} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))
+        )}
+
+        {/* EDIT MODAL */}
+        {showEdit && (
+          <Modal visible={showEdit} transparent animationType="slide">
+            <View style={s.modalOverlay}>
+              <View style={s.modalContent}>
+                <AppText font="bold" style={s.modalTitle}>Edit Product</AppText>
+
+                <ScrollView>
+                  <AppText style={s.fieldLabel}>Product Name</AppText>
+                  <TextInput
+                    style={s.input}
+                    value={editName}
+                    onChangeText={setEditName}
+                  />
+
+                  <AppText style={s.fieldLabel}>Category</AppText>
                   <View style={s.categoryRow}>
                     {CATEGORIES.map((item) => (
                       <TouchableOpacity
                         key={item}
                         style={[
                           s.categoryBtn,
-                          category === item && s.categorySelected,
+                          editCategory === item && s.categorySelected,
                         ]}
-                        onPress={() => setCategory(item)}
+                        onPress={() => setEditCategory(item)}
                       >
-                        <AppText
-                          style={[
-                            s.categoryText,
-                            category === item && { color: "#fff" },
-                          ]}
-                        >
+                        <AppText style={[s.categoryText, editCategory === item && { color: "#fff" }]}>
                           {item}
                         </AppText>
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
-                <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
-                  Price
-                </AppText>
-                <TextInput
-                  placeholder="Price"
-                  keyboardType="numeric"
-                  style={s.input}
-                  value={price}
-                  onChangeText={setPrice}
-                />
-                <AppText style={{ marginBottom: 4, fontWeight: "600" }}>
-                  Stock
-                </AppText>
-                <TextInput
-                  placeholder="Stock"
-                  keyboardType="numeric"
-                  style={s.input}
-                  value={stock}
-                  onChangeText={setStock}
-                />
 
-                <TouchableOpacity style={s.saveBtn} onPress={handleAddProduct}>
-                  <AppText font="satoshi" style={s.saveText}>
-                    Save Product
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            )}
+                  <AppText style={s.fieldLabel}>Price (₹)</AppText>
+                  <TextInput
+                    style={s.input}
+                    keyboardType="numeric"
+                    value={editPrice}
+                    onChangeText={setEditPrice}
+                  />
 
-            {/* INVENTORY LIST */}
-            {inventory.length === 0 ? (
-              <AppText style={s.empty}>
-                No products in inventory.
-              </AppText>
-            ) : (
-              inventory.map((item) => (
-                <View key={item.id} style={s.card}>
-                  <View style={s.leftSection}>
-                    <AppText font="semibold" style={s.productName}>
-                      {item.product_name}
-                    </AppText>
+                  <AppText style={s.fieldLabel}>Stock</AppText>
+                  <TextInput
+                    style={s.input}
+                    keyboardType="numeric"
+                    value={editStock}
+                    onChangeText={setEditStock}
+                  />
 
-                    <AppText style={s.category}>
-                      {item.category}
-                    </AppText>
+                  <AppText style={s.fieldLabel}>Barcode</AppText>
+                  <TextInput
+                    style={s.input}
+                    value={editBarcode}
+                    onChangeText={setEditBarcode}
+                  />
 
-                    {item.barcode ? (
-                      <AppText style={s.barcode}>
-                        📦 {item.barcode}
-                      </AppText>
-                    ) : null}
-
-                    <AppText style={s.price}>
-                      ₹{Number(item.price).toFixed(2)}
-                    </AppText>
-                  </View>
-
-                  <View style={s.rightSection}>
-                    <AppText
-                      style={[
-                        s.stock,
-                        item.stock <= 5 && item.stock > 0 && { color: DANGER },
-                        item.stock === 0 && {
-                          color: DANGER,
-                          fontWeight: "bold",
-                        },
-                      ]}
+                  <View style={s.btnRow}>
+                    <TouchableOpacity
+                      style={[s.modalBtn, { backgroundColor: "#ccc" }]}
+                      onPress={() => setShowEdit(false)}
                     >
-                      Stock: {item.stock}
-                    </AppText>
-
-                    <View style={s.actionRow}>
-                      <TouchableOpacity
-                        style={s.iconBtn}
-                        onPress={() => startEdit(item)}
-                      >
-                        <AppText style={{ color: ACCENT, fontSize: 16 }}>✏️</AppText>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={s.iconBtn}
-                        onPress={() => handleDeleteProduct(item.id)}
-                      >
-                       <AppText style={{ color: DANGER, fontSize: 16 }}>🗑️</AppText>
-                      </TouchableOpacity>
-                    </View>
+                      <AppText style={{ color: "#333" }}>Cancel</AppText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.modalBtn, { backgroundColor: ACCENT }]}
+                      onPress={handleUpdateProduct}
+                    >
+                      <AppText style={{ color: "#fff" }}>Save Changes</AppText>
+                    </TouchableOpacity>
                   </View>
-                </View>
-              ))
-            )}
-
-            {/* EDIT MODAL */}
-            {showEdit && (
-              <Modal visible={showEdit} transparent animationType="slide">
-                <View style={s.modalOverlay}>
-                  <View style={s.modalContent}>
-                    <AppText font="bold" style={s.modalTitle}>Edit Product</AppText>
-
-                    <ScrollView>
-                      <AppText style={s.fieldLabel}>Product Name</AppText>
-                      <TextInput
-                        style={s.input}
-                        value={editName}
-                        onChangeText={setEditName}
-                      />
-
-                      <AppText style={s.fieldLabel}>Category</AppText>
-                      <View style={s.categoryRow}>
-                        {CATEGORIES.map((item) => (
-                          <TouchableOpacity
-                            key={item}
-                            style={[
-                              s.categoryBtn,
-                              editCategory === item && s.categorySelected,
-                            ]}
-                            onPress={() => setEditCategory(item)}
-                          >
-                            <AppText style={[s.categoryText, editCategory === item && { color: "#fff" }]}>
-                              {item}
-                            </AppText>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-
-                      <AppText style={s.fieldLabel}>Price (₹)</AppText>
-                      <TextInput
-                        style={s.input}
-                        keyboardType="numeric"
-                        value={editPrice}
-                        onChangeText={setEditPrice}
-                      />
-
-                      <AppText style={s.fieldLabel}>Stock</AppText>
-                      <TextInput
-                        style={s.input}
-                        keyboardType="numeric"
-                        value={editStock}
-                        onChangeText={setEditStock}
-                      />
-
-                      <AppText style={s.fieldLabel}>Barcode</AppText>
-                      <TextInput
-                        style={s.input}
-                        value={editBarcode}
-                        onChangeText={setEditBarcode}
-                      />
-
-                      <View style={s.btnRow}>
-                        <TouchableOpacity
-                          style={[s.modalBtn, { backgroundColor: "#ccc" }]}
-                          onPress={() => setShowEdit(false)}
-                        >
-                          <AppText style={{ color: "#333" }}>Cancel</AppText>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[s.modalBtn, { backgroundColor: ACCENT }]}
-                          onPress={handleUpdateProduct}
-                        >
-                          <AppText style={{ color: "#fff" }}>Save Changes</AppText>
-                        </TouchableOpacity>
-                      </View>
-                    </ScrollView>
-                  </View>
-                </View>
-              </Modal>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      );
-    }
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
 const s = StyleSheet.create({
-      safe: { flex: 1, backgroundColor: BG },
-      content: { padding: 16 },
-      title: { fontSize: 32, marginBottom: 20 },
+  safe: { flex: 1, backgroundColor: BG },
+  content: { padding: 16 },
+  title: { fontSize: 32, marginBottom: 20 },
 
-      addBtn: {
-        backgroundColor: ACCENT,
-        padding: 12,
-        borderRadius: 25,
-        alignItems: "center",
-        marginBottom: 20,
-      },
-      addText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  addBtn: {
+    backgroundColor: ACCENT,
+    padding: 12,
+    borderRadius: 25,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  addText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 
-      formCard: {
-        backgroundColor: WHITE,
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 20,
-      },
+  formCard: {
+    backgroundColor: WHITE,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
 
-      input: {
-        borderWidth: 1,
-        borderColor: "#ddd",
-        padding: 10,
-        borderRadius: 12,
-        marginBottom: 10,
-        color: "#1a1a1a",
-      },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 10,
+    borderRadius: 12,
+    marginBottom: 10,
+    color: "#1a1a1a",
+  },
 
-      scanBarcodeBtn: {
-        backgroundColor: ACCENT,
-        padding: 10,
-        borderRadius: 12,
-        alignItems: "center",
-        marginBottom: 10,
-      },
+  scanBarcodeBtn: {
+    backgroundColor: ACCENT,
+    padding: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 10,
+  },
 
-      scanBarcodeText: {
-        color: "#fff",
-        fontWeight: "600",
-      },
+  scanBarcodeText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
 
-      barcodeText: {
-        marginBottom: 10,
-        fontWeight: "600",
-        color: "#333",
-      },
+  barcodeText: {
+    marginBottom: 10,
+    fontWeight: "600",
+    color: "#333",
+  },
 
-      saveBtn: {
-        backgroundColor: "#000",
-        padding: 12,
-        borderRadius: 25,
-        alignItems: "center",
-      },
-      saveText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  saveBtn: {
+    backgroundColor: "#000",
+    padding: 12,
+    borderRadius: 25,
+    alignItems: "center",
+  },
+  saveText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 
-      card: {
-        backgroundColor: WHITE,
-        padding: 16,
-        borderRadius: 18,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      },
+  card: {
+    backgroundColor: WHITE,
+    padding: 16,
+    borderRadius: 18,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
 
-      leftSection: { width: "70%" },
+  leftSection: { width: "70%" },
 
-      rightSection: {
-        width: "30%",
-        justifyContent: "center",
-        alignItems: "flex-end",
-      },
+  rightSection: {
+    width: "30%",
+    justifyContent: "center",
+    alignItems: "flex-end",
+  },
 
-      dropdown: {
-        backgroundColor: "#fff",
-        borderWidth: 1,
-        borderColor: "#ddd",
-        borderRadius: 12,
-        marginBottom: 10,
-      },
+  dropdown: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 12,
+    marginBottom: 10,
+  },
 
-      dropdownItem: {
-        padding: 10,
-        borderBottomWidth: 1,
-        borderColor: "#eee",
-        color: "#1a1a1a",
-      },
+  dropdownItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+    color: "#1a1a1a",
+  },
 
-      categoryWrapper: { marginBottom: 12 },
+  categoryWrapper: { marginBottom: 12 },
 
-      categoryRow: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 8,
-        marginBottom: 10,
-      },
+  categoryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
 
-      categoryBtn: {
-        borderWidth: 1,
-        borderColor: ACCENT,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 20,
-        marginRight: 8,
-        marginBottom: 8,
-      },
+  categoryBtn: {
+    borderWidth: 1,
+    borderColor: ACCENT,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+  },
 
-      categorySelected: { backgroundColor: ACCENT },
+  categorySelected: { backgroundColor: ACCENT },
 
-      categoryText: {
-        fontSize: 12,
-        color: ACCENT,
-        fontWeight: "600",
-      },
+  categoryText: {
+    fontSize: 12,
+    color: ACCENT,
+    fontWeight: "600",
+  },
 
-      productName: { flexWrap: "wrap", color: "#1a1a1a", fontSize: 16 },
+  productName: { flexWrap: "wrap", color: "#1a1a1a", fontSize: 16 },
 
-      price: { marginTop: 6, fontWeight: "600", color: "#1a1a1a" },
+  price: { marginTop: 6, fontWeight: "600", color: "#1a1a1a" },
 
-      category: { fontSize: 12, color: "#666", marginTop: 2 },
+  category: { fontSize: 12, color: "#666", marginTop: 2 },
 
-      barcode: { fontSize: 11, color: "#999", marginTop: 2 },
+  barcode: { fontSize: 11, color: "#999", marginTop: 2 },
 
-      stock: { fontSize: 14, fontWeight: "600", color: "#1a1a1a" },
+  stock: { fontSize: 14, fontWeight: "600", color: "#1a1a1a" },
 
-      actionRow: {
-        flexDirection: 'row',
-        marginTop: 10,
-        gap: 12,
-      },
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: 10,
+    gap: 12,
+  },
 
-      iconBtn: {
-        padding: 4,
-      },
+  iconBtn: {
+    padding: 4,
+  },
 
-      iconImg: {
-        width: 20,
-        height: 20,
-        resizeMode: "contain",
-      },
+  iconImg: {
+    width: 20,
+    height: 20,
+    resizeMode: "contain",
+  },
 
-      modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        justifyContent: "flex-end",
-      },
-      modalContent: {
-        backgroundColor: "#fff",
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 24,
-        maxHeight: "80%",
-      },
-      modalTitle: {
-        fontSize: 20,
-        color: "#1a1a1a",
-        marginBottom: 20,
-        textAlign: "center",
-      },
-      fieldLabel: {
-        fontSize: 14,
-        color: "#666",
-        marginBottom: 6,
-        fontWeight: "600",
-      },
-      btnRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginTop: 20,
-        gap: 12,
-      },
-      modalBtn: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
-        alignItems: "center",
-      },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: "80%",
+  },
+  modalTitle: {
+    fontSize: 20,
+    color: "#1a1a1a",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  fieldLabel: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 6,
+    fontWeight: "600",
+  },
+  btnRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
 
-      empty: { textAlign: "center", marginTop: 40, color: "#808080" },
-    });
+  empty: { textAlign: "center", marginTop: 40, color: "#808080" },
+});

@@ -12,7 +12,9 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Alert
+  Alert,
+  Modal,
+  BackHandler
 } from "react-native";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -41,6 +43,8 @@ export default function ScanScreen({ navigation, route }) {
   const [torchOn, setTorchOn] = useState(false);
   const [verificationProgress, setVerificationProgress] = useState({ active: false, count: 0 });
   const [scannedItems, setScannedItems] = useState([]);
+  const [showNotFound, setShowNotFound] = useState(false);
+  const [notFoundMessage, setNotFoundMessage] = useState("");
 
 
   // Stable refs — avoid stale closure problems in the scan loop
@@ -49,11 +53,14 @@ export default function ScanScreen({ navigation, route }) {
   const scanModeRef = useRef("product");
   const cameraReadyRef = useRef(false);
   const cameraRef = useRef(null);
+  const cartScrollRef = useRef(null);
+  const transactionIdRef = useRef(transactionId);
 
   // Keep refs in sync with state so the scan loop always reads fresh values
   useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
   useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
   useEffect(() => { cameraReadyRef.current = cameraReady; }, [cameraReady]);
+  useEffect(() => { transactionIdRef.current = transactionId; }, [transactionId]);
 
 
   const switchMode = (newMode) => {
@@ -118,11 +125,11 @@ export default function ScanScreen({ navigation, route }) {
 
     let active = true;
     const loop = async () => {
-      // Give camera 2 s to fully settle (autofocus, exposure)
-      await new Promise((res) => setTimeout(res, 2000));
+      // Give camera 1 s to fully settle (autofocus, exposure)
+      await new Promise((res) => setTimeout(res, 1000));
       while (active && !isLockedRef.current && scanModeRef.current === "product") {
         await runInference();
-        await new Promise((res) => setTimeout(res, 1200));
+        await new Promise((res) => setTimeout(res, 600));
       }
     };
     loop();
@@ -133,29 +140,47 @@ export default function ScanScreen({ navigation, route }) {
   // ─── Sync Cart from Context/Backend ─────────────────────────────────────
   useFocusEffect(
     useCallback(() => {
-      if (transactionId) {
-        // Fetch current transaction items to keep ScanScreen sync'd
-        api.get(`/transactions/${transactionId}`)
+      // Only sync from backend if we have an active transaction when entering focus
+      const activeId = transactionIdRef.current;
+      if (activeId) {
+        console.log("[ScanScreen] Screen focused, syncing cart for transaction:", activeId);
+        api.get(`/transactions/${activeId}`)
           .then(res => {
             const backendItems = res.data.items || [];
-            // Map backend items to local scannedItems format
             const mapped = backendItems.map(item => ({
               productName: item.description,
               category: item.category,
               price: item.rate,
-              stock: null, // We don't have stock info in transaction items, assume null or fetch separately if needed
+              stock: null,
               barcode: item.barcode,
               qty: item.qty
             }));
             setScannedItems(mapped);
           })
           .catch(err => console.log("Focus cart fetch error:", err));
-      } else {
-        // If no active transaction, clear local scanned items
-        setScannedItems([]);
       }
-    }, [transactionId])
+
+      // Hardware back press handler
+      const onBackPress = () => {
+        clearCart();
+        navigation.navigate("Main", { screen: "Dashboard" });
+        return true; // Prevent default behavior
+      };
+
+      const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      return () => subscription.remove();
+    }, []) // Empty dependencies means this only runs when the screen gains focus
   );
+
+  // ─── Auto-scroll cart to bottom on new items ──────────────────────────────
+  useEffect(() => {
+    if (scannedItems.length > 0) {
+      // Small timeout to ensure the new item has rendered before scrolling
+      setTimeout(() => {
+        cartScrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [scannedItems.length]);
 
   // ─── Confirm prediction → navigate ───────────────────────────────────────
   const handleConfirm = () => {
@@ -265,11 +290,11 @@ export default function ScanScreen({ navigation, route }) {
   const handleBarcodeScanned = async ({ data }) => {
     if (scanMode !== "barcode" || !data || isAnalyzing) return;
 
-    const newBuffer = [...barcodeBuffer, data].slice(-5);
+    const newBuffer = [...barcodeBuffer, data].slice(-3);
     setBarcodeBuffer(newBuffer);
     setVerificationProgress({ active: true, count: newBuffer.length });
 
-    if (newBuffer.length === 5 && newBuffer.every((val) => val === data)) {
+    if (newBuffer.length === 3 && newBuffer.every((val) => val === data)) {
       setBarcodeBuffer([]);
       setVerificationProgress({ active: false, count: 0 });
       setIsAnalyzing(true);
@@ -304,10 +329,13 @@ export default function ScanScreen({ navigation, route }) {
             }
           });
         } else {
-          Alert.alert("Product Not Found", res.data.message || "No product with this barcode exists.");
+          setNotFoundMessage(res.data.message || "No product with this barcode exists in your inventory.");
+          setShowNotFound(true);
         }
       } catch (err) {
         console.log("Barcode lookup error:", err.response?.data?.error || err.message);
+        setNotFoundMessage("An error occurred while looking up the product. Please try again.");
+        setShowNotFound(true);
       } finally {
         setTimeout(() => setIsAnalyzing(false), 800);
       }
@@ -397,7 +425,7 @@ export default function ScanScreen({ navigation, route }) {
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
-      {scanMode === "barcode" && (
+      {(scanMode === "barcode" || scanMode === "product") && (
         <TouchableOpacity
           style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
           onPress={() => setTorchOn(!torchOn)}
@@ -429,7 +457,12 @@ export default function ScanScreen({ navigation, route }) {
       )}
 
       {/* Bottom sheet */}
-      <View style={[styles.bottomSheet, scanMode === "barcode" && styles.bottomSheetCart, scanMode === "manual" && styles.bottomSheetManual]}>
+      <View style={[
+        styles.bottomSheet,
+        scanMode === "product" && styles.bottomSheetProduct,
+        scanMode === "barcode" && styles.bottomSheetCart,
+        scanMode === "manual" && styles.bottomSheetManual
+      ]}>
 
         {/* Full-Width Mode Toggle enclosed in Bottom Sheet */}
         <View style={styles.toggleContainer}>
@@ -522,7 +555,11 @@ export default function ScanScreen({ navigation, route }) {
             </View>
 
             {/* List */}
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cartList}>
+            <ScrollView
+              ref={cartScrollRef}
+              showsVerticalScrollIndicator={false}
+              style={styles.cartList}
+            >
               {scannedItems.length === 0 ? (
                 <AppText style={styles.emptyCartText}>
                   {scanMode === "barcode" ? "Point camera at a barcode to scan." : "Search and add products."}
@@ -605,9 +642,90 @@ export default function ScanScreen({ navigation, route }) {
         )}
       </View>
 
+      {/* ─── Product Not Found Modal ─── */}
+      <Modal
+        visible={showNotFound}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={notFoundStyles.modalContainer}>
+          <View style={notFoundStyles.modalBox}>
+            <View style={notFoundStyles.modalIconContainer}>
+              <AppText style={{ fontSize: 24, color: "#FFF", fontWeight: "bold" }}>!</AppText>
+            </View>
+            <AppText font="bold" style={[notFoundStyles.modalTitle, { marginBottom: 20 }]}>
+              {notFoundMessage || "Product Not Found"}
+            </AppText>
+
+            <TouchableOpacity
+              style={notFoundStyles.modalBtn}
+              onPress={() => setShowNotFound(false)}
+            >
+              <AppText font="bold" style={{ color: "#FFF", fontSize: 16 }}>Close</AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
+
+const notFoundStyles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalBox: {
+    backgroundColor: "#FFF",
+    width: "85%",
+    borderRadius: 24,
+    padding: 30,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFC107",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+    shadowColor: "#FFC107",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: "#333",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  modalText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  modalBtn: {
+    backgroundColor: "#2254C5",
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
@@ -628,7 +746,7 @@ const styles = StyleSheet.create({
 
   scannerFrame: {
     position: "absolute",
-    top: "12.5%",
+    top: "18%",
     left: "10%",
     width: "80%",
     height: "25%",
@@ -637,7 +755,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: "10%",
     width: "80%",
-    top: "12.5%",
+    top: "18%",
     height: "25%",
   },
 
@@ -692,11 +810,13 @@ const styles = StyleSheet.create({
 
   bottomSheet: {
     backgroundColor: "#F9F6EE",
-    paddingTop: 14,
-    paddingBottom: 14,
     paddingHorizontal: 20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+  },
+  bottomSheetProduct: {
+    paddingTop: 14,
+    paddingBottom: 14,
     height: 420,
     justifyContent: "center",
   },
@@ -743,7 +863,7 @@ const styles = StyleSheet.create({
   },
   bottomSheetManual: {
     flex: 1,
-    paddingTop: 50,
+    paddingTop: 100,
     paddingBottom: 24,
     justifyContent: "flex-start",
     borderTopLeftRadius: 0,
@@ -807,7 +927,7 @@ const styles = StyleSheet.create({
 
   verificationOverlay: {
     position: "absolute",
-    top: "10%",
+    top: "12%",
     alignSelf: "center",
     backgroundColor: "rgba(0,0,0,0.7)",
     paddingVertical: 8,

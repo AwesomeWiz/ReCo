@@ -91,6 +91,15 @@ export default function LoginScreen({ navigation }) {
           </AppText>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.button, styles.secondaryButton]}
+          onPress={() => navigation.navigate("SignUp")}
+        >
+          <AppText font="satoshi" style={styles.secondaryButtonText}>
+            Create an Account
+          </AppText>
+        </TouchableOpacity>
+
       </View>
     </View>
   );
@@ -126,5 +135,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-  buttonText: { color: "white", fontSize: 18 },
+  secondaryButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: "#2254C5",
+    marginTop: 15,
+  },
+  secondaryButtonText: { color: "#2254C5", fontSize: 18 },
 });

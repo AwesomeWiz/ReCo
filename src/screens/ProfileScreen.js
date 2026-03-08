@@ -6,6 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -54,6 +58,11 @@ export default function ProfileScreen({ navigation }) {
   const [phone, setPhone] = useState("");
   const [totalItems, setTotalItems] = useState(null);
   const [totalSales, setTotalSales] = useState(null);
+  const [upiId, setUpiId] = useState("");
+  const [tempUpi, setTempUpi] = useState("");
+  const [showUpiModal, setShowUpiModal] = useState(false);
+
+  const { clearCart } = useContext(CartContext);
 
   useFocusEffect(
     useCallback(() => {
@@ -100,6 +109,25 @@ export default function ProfileScreen({ navigation }) {
   const handleLogout = () => {
     Alert.alert("Log out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Up",
+        onPress: async () => {
+          await AsyncStorage.multiRemove([
+            "token",
+            "store_name",
+            "state",
+            "district",
+            "country",
+            "phone",
+            "upi_id"
+          ]);
+          clearCart();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "SignUp" }],
+          });
+        }
+      },
       {
         text: "Log out",
         style: "destructive",
@@ -205,7 +233,7 @@ export default function ProfileScreen({ navigation }) {
 
         <AppText style={s.versionText}>ReCo · v1.0</AppText>
         <AppText style={s.creditsText}>Made with love from Kakkanad 🌴</AppText>
-        <AppText style={s.creditsSubText}>By Abhishikth, Arnold, Alen Abhraham Saji and Alan Jophy</AppText>
+        <AppText style={s.creditsSubText}>By Abhishikth, Arnold, Alen Abraham Saji and Alan Jophy</AppText>
       </ScrollView>
 
       {/* ─── UPI Modal ──────────────────────────────────────────────────────── */}
