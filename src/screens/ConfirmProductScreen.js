@@ -48,12 +48,20 @@ export default function ConfirmProductScreen({ route, navigation }) {
   const totalItem = price * quantity;
 
   // Cart flow logic
-  const cartModeTotal = cartData.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
+  // Cart flow logic - use context cartItems if available, fallback to route params
+  const activeCartItems = isCartFlow ? cartItems : cartData;
+  const cartModeTotal = isCartFlow
+    ? cartItems.reduce((acc, curr) => acc + (curr.amount || 0), 0)
+    : cartData.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
 
   // ─── Data fetch on mount ──────────────────────────────────────────────────
   useEffect(() => {
     if (routeBarcode && !routePrediction.productName && !isCartFlow) {
       lookupBarcode(routeBarcode);
+    }
+
+    if (isCartFlow && transactionId) {
+      fetchCart(transactionId);
     }
 
     // Fetch UPI details for payment QR
@@ -130,25 +138,9 @@ export default function ConfirmProductScreen({ route, navigation }) {
       }
 
       if (isCartFlow) {
-        // Sequentially add all cart items
-        for (const item of cartData) {
-          // Verify stock locally before adding if we can
-          if (item.stock !== null && item.qty > item.stock) {
-            Alert.alert("Warning", `Only ${item.stock} left for ${item.productName}, adjusting quantity.`);
-            item.qty = item.stock;
-          }
-          if (item.qty > 0) {
-            await api.post("/transactions/add-item", {
-              transaction_id: activeId,
-              product_name: item.productName,
-              category: item.category || "",
-              barcode: item.barcode || null,
-              price: item.price,
-              quantity: item.qty,
-              total: item.price * item.qty
-            });
-          }
-        }
+        // Items are already in the backend via ScanScreen sync. 
+        // We only need to add items that might NOT be in the transaction yet (if any).
+        // For now, assume they are all synced.
       } else {
         // Single item flow
         await api.post("/transactions/add-item", {
@@ -232,10 +224,10 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 Scanned Items
               </AppText>
 
-              {cartData.map((item, idx) => (
+              {activeCartItems.map((item, idx) => (
                 <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <AppText style={{ flex: 1 }}>{item.qty}x {item.productName}</AppText>
-                  <AppText>₹{(item.price * item.qty).toFixed(2)}</AppText>
+                  <AppText style={{ flex: 1 }}>{item.qty}x {item.productName || item.description}</AppText>
+                  <AppText>₹{(item.amount || (item.price * item.qty)).toFixed(2)}</AppText>
                 </View>
               ))}
 

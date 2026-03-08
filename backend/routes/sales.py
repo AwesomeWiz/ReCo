@@ -88,16 +88,18 @@ def add_item_to_transaction(user_id):
                 shop_id,
                 product_name,
                 category,
+                barcode,
                 price,
                 quantity,
                 total,
                 transaction_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user_id,
             product_name,
             category,
+            barcode,
             price,
             quantity,
             total,
@@ -140,6 +142,115 @@ def add_item_to_transaction(user_id):
 
 
 # ─────────────────────────────────────────────
+# REMOVE ITEM FROM TRANSACTION
+# ─────────────────────────────────────────────
+@sales_bp.route("/transactions/remove-item", methods=["POST"])
+@token_required
+def remove_item(user_id):
+    data = request.json
+    try:
+        transaction_id = data["transaction_id"]
+        product_name = data["product_name"]
+        barcode = data.get("barcode")
+    except KeyError as e:
+        return jsonify({"error": f"Missing field: {str(e)}"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Get the item total to deduct from transaction total
+        cur.execute("""
+            SELECT total FROM sales 
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (transaction_id, product_name, barcode, barcode))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({"error": "Item not found in transaction"}), 404
+
+        item_total = float(item["total"])
+
+        # Delete from sales
+        cur.execute("""
+            DELETE FROM sales 
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (transaction_id, product_name, barcode, barcode))
+
+        # Update transaction total
+        cur.execute("""
+            UPDATE transactions
+            SET total = GREATEST(total - %s, 0)
+            WHERE id = %s AND shop_id = %s
+        """, (item_total, transaction_id, user_id))
+
+        conn.commit()
+        return jsonify({"message": "Item removed"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# ─────────────────────────────────────────────
+# UPDATE ITEM QUANTITY
+# ─────────────────────────────────────────────
+@sales_bp.route("/transactions/update-item-qty", methods=["POST"])
+@token_required
+def update_item_qty(user_id):
+    data = request.json
+    try:
+        transaction_id = data["transaction_id"]
+        product_name = data["product_name"]
+        barcode = data.get("barcode")
+        new_qty = data["quantity"]
+    except KeyError as e:
+        return jsonify({"error": f"Missing field: {str(e)}"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Get current item info
+        cur.execute("""
+            SELECT price, quantity, total FROM sales 
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (transaction_id, product_name, barcode, barcode))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({"error": "Item not found"}), 404
+
+        old_total = float(item["total"])
+        price = float(item["price"])
+        new_total = price * new_qty
+
+        # Update sales record
+        cur.execute("""
+            UPDATE sales 
+            SET quantity = %s, total = %s
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (new_qty, new_total, transaction_id, product_name, barcode, barcode))
+
+        # Update transaction total
+        cur.execute("""
+            UPDATE transactions
+            SET total = total - %s + %s
+            WHERE id = %s AND shop_id = %s
+        """, (old_total, new_total, transaction_id, user_id))
+
+        conn.commit()
+        return jsonify({"message": "Quantity updated"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─────────────────────────────────────────────
 # GET TRANSACTION ITEMS
 # ─────────────────────────────────────────────
 @sales_bp.route("/transactions/<int:transaction_id>", methods=["GET"])
@@ -161,7 +272,7 @@ def get_transaction(user_id, transaction_id):
             return jsonify({"error": "Transaction not found"}), 404
 
         cur.execute("""
-            SELECT product_name, quantity, price, total
+            SELECT product_name, quantity, price, total, category, barcode
             FROM sales
             WHERE transaction_id = %s AND shop_id = %s
         """, (transaction_id, user_id))
@@ -173,7 +284,9 @@ def get_transaction(user_id, transaction_id):
                 "description": row["product_name"],
                 "qty": row["quantity"],
                 "rate": float(row["price"]),
-                "amount": float(row["total"])
+                "amount": float(row["total"]),
+                "category": row["category"],
+                "barcode": row["barcode"]
             }
             for row in rows
         ]

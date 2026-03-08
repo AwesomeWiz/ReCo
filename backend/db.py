@@ -14,7 +14,6 @@ def get_connection():
         ssl_disabled=True,
     )
     
-    # --- AUTO FIX FOR TRUNCATION ISSUE ---
     if not _DB_FIXED:
         try:
             with conn.cursor() as cur:
@@ -26,6 +25,12 @@ def get_connection():
                     SET product_name = 'Tropicana Fruit Juice - Delight Guava1 L'
                     WHERE product_name = 'Tr' AND (barcode = '8902080001439' OR (category = 'Beverages' AND price = 70.00))
                 """)
+                
+                # Fix sales table
+                cur.execute("SHOW COLUMNS FROM sales LIKE 'barcode'")
+                if not cur.fetchone():
+                    cur.execute("ALTER TABLE sales ADD COLUMN barcode VARCHAR(50) AFTER category")
+                
                 conn.commit()
                 _DB_FIXED = True
         except Exception as e:

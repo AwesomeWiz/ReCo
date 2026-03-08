@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useContext } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   StyleSheet,
@@ -21,6 +22,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
 import AppText from "../components/AppText";
 import api from "../api/api";
+import { CartContext } from "../context/CartContext";
 
 export default function ScanScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -30,6 +32,7 @@ export default function ScanScreen({ navigation, route }) {
   const [barcodeBuffer, setBarcodeBuffer] = useState([]);
   const [isLocked, setIsLocked] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const { transactionId, cartItems, setTransactionId, setCartItems } = useContext(CartContext);
 
   // New UI states merged in
   const [searchQuery, setSearchQuery] = useState("");
@@ -93,7 +96,7 @@ export default function ScanScreen({ navigation, route }) {
 
       setPrediction({ productName, confidence });
 
-      if (confidence >= 0.20) {
+      if (confidence >= 0.25) {
         setIsLocked(true);
         isLockedRef.current = true;
       }
@@ -124,6 +127,33 @@ export default function ScanScreen({ navigation, route }) {
 
     return () => { active = false; };
   }, [scanMode, isLocked, cameraReady, runInference]);
+
+  // ─── Sync Cart from Context/Backend ─────────────────────────────────────
+  useFocusEffect(
+    useCallback(() => {
+      if (transactionId) {
+        // Fetch current transaction items to keep ScanScreen sync'd
+        api.get(`/transactions/${transactionId}`)
+          .then(res => {
+            const backendItems = res.data.items || [];
+            // Map backend items to local scannedItems format
+            const mapped = backendItems.map(item => ({
+              productName: item.description,
+              category: item.category,
+              price: item.rate,
+              stock: null, // We don't have stock info in transaction items, assume null or fetch separately if needed
+              barcode: item.barcode,
+              qty: item.qty
+            }));
+            setScannedItems(mapped);
+          })
+          .catch(err => console.log("Focus cart fetch error:", err));
+      } else {
+        // If no active transaction, clear local scanned items
+        setScannedItems([]);
+      }
+    }, [transactionId])
+  );
 
   // ─── Confirm prediction → navigate ───────────────────────────────────────
   const handleConfirm = () => {
@@ -163,24 +193,72 @@ export default function ScanScreen({ navigation, route }) {
     }
   }, [searchQuery, inventoryList]);
 
+  // ─── Backend Sync Helper ──────────────────────────────────────────────
+  const syncWithBackend = async (item, targetQty) => {
+    try {
+      let activeId = transactionId;
+      if (!activeId) {
+        const startRes = await api.post("/transactions/start");
+        activeId = startRes.data.transaction_id;
+        setTransactionId(activeId);
+      }
+
+      console.log(`Syncing ${item.productName}, qty: ${targetQty}`);
+
+      const existingItem = scannedItems.find(i => i.barcode === item.barcode || i.productName === item.productName);
+
+      if (targetQty === 0) {
+        await api.post("/transactions/remove-item", {
+          transaction_id: activeId,
+          product_name: item.productName,
+          barcode: item.barcode
+        });
+      } else if (existingItem) {
+        await api.post("/transactions/update-item-qty", {
+          transaction_id: activeId,
+          product_name: item.productName,
+          barcode: item.barcode,
+          quantity: targetQty
+        });
+      } else {
+        await api.post("/transactions/add-item", {
+          transaction_id: activeId,
+          product_name: item.productName,
+          category: item.category || "",
+          barcode: item.barcode,
+          price: item.price,
+          quantity: targetQty,
+          total: item.price * targetQty
+        });
+      }
+    } catch (err) {
+      console.log("Sync error:", err.response?.data || err.message);
+    }
+  };
+
   const handleManualSelect = (prod) => {
-    // Treat null stock as infinite (or handle it gracefully) if your DB allows it.
-    // If you strictly require stock tracking everywhere, keep the `stock <= 0` check.
     if (prod.stock !== null && prod.stock <= 0) {
       Alert.alert("Out of Stock", "This item has no available stock.");
       return;
     }
+
+    const newItem = {
+      productName: prod.name || prod.product_name || prod.productName || "Unknown",
+      category: prod.category,
+      price: Number(prod.price),
+      stock: prod.stock,
+      barcode: prod.barcode,
+      qty: 1
+    };
+
     setScannedItems((prev) => {
       const existing = prev.find(item => item.barcode === prod.barcode);
-      if (existing) return prev;
-      return [...prev, {
-        productName: prod.name || prod.product_name || prod.productName || "Unknown",
-        category: prod.category,
-        price: Number(prod.price),
-        stock: prod.stock,
-        barcode: prod.barcode,
-        qty: 1
-      }];
+      if (existing) {
+        syncWithBackend(newItem, existing.qty + 1);
+        return prev.map(i => i.barcode === prod.barcode ? { ...i, qty: i.qty + 1 } : i);
+      }
+      syncWithBackend(newItem, 1);
+      return [...prev, newItem];
     });
     setSearchQuery("");
   };
@@ -196,7 +274,7 @@ export default function ScanScreen({ navigation, route }) {
     if (newBuffer.length === 5 && newBuffer.every((val) => val === data)) {
       setBarcodeBuffer([]);
       setVerificationProgress({ active: false, count: 0 });
-      setIsAnalyzing(true); // Re-use this flag for locking camera temporarily
+      setIsAnalyzing(true);
 
       try {
         if (route?.params?.mode === "inventory") {
@@ -205,58 +283,58 @@ export default function ScanScreen({ navigation, route }) {
           return;
         }
 
-        // Lookup product
         const res = await api.post("/inventory/barcode-lookup", { barcode: data });
         if (res.data.found) {
           const prod = res.data.product;
+          const newItem = {
+            productName: prod.name,
+            category: prod.category,
+            price: Number(prod.price),
+            stock: prod.stock,
+            barcode: prod.barcode,
+            qty: 1
+          };
 
           setScannedItems((prev) => {
             const existing = prev.find(item => item.barcode === prod.barcode);
             if (existing) {
-              // Product is already in the list, don't auto-increment
-              return prev;
+              syncWithBackend(newItem, existing.qty + 1);
+              return prev.map(i => i.barcode === prod.barcode ? { ...i, qty: i.qty + 1 } : i);
             } else {
-              return [...prev, {
-                productName: prod.name,
-                category: prod.category,
-                price: Number(prod.price),
-                stock: prod.stock,
-                barcode: prod.barcode,
-                qty: 1
-              }];
+              syncWithBackend(newItem, 1);
+              return [...prev, newItem];
             }
           });
         } else {
-          Alert.alert(
-            "Product Not Found",
-            res.data.message || "No product with this barcode exists."
-          );
+          Alert.alert("Product Not Found", res.data.message || "No product with this barcode exists.");
         }
       } catch (err) {
         console.log("Barcode lookup error:", err.response?.data?.error || err.message);
-        Alert.alert("Lookup Failed", "Could not fetch product details.");
       } finally {
-        setTimeout(() => setIsAnalyzing(false), 800); // Temporary cooldown before next scan
+        setTimeout(() => setIsAnalyzing(false), 800);
       }
     }
   };
 
   const handleQuantityChange = (barcode, delta) => {
     setScannedItems((prev) => {
-      return prev.map(item => {
-        if (item.barcode === barcode) {
-          const newQty = item.qty + delta;
+      const item = prev.find(i => i.barcode === barcode);
+      if (!item) return prev;
 
-          // Prevent going above max stock
-          if (delta > 0 && item.stock !== null && newQty > item.stock) {
-            Alert.alert("Max Stock", `Only ${item.stock} items available in inventory.`);
-            return item;
-          }
+      const newQty = item.qty + delta;
 
-          return { ...item, qty: newQty > 0 ? newQty : 0 };
-        }
-        return item;
-      }).filter(item => item.qty > 0);
+      if (delta > 0 && item.stock !== null && newQty > item.stock) {
+        Alert.alert("Max Stock", `Only ${item.stock} items available in inventory.`);
+        return prev;
+      }
+
+      syncWithBackend(item, Math.max(0, newQty));
+
+      if (newQty <= 0) {
+        return prev.filter(i => i.barcode !== barcode);
+      }
+
+      return prev.map(i => i.barcode === barcode ? { ...i, qty: newQty } : i);
     });
   };
 
