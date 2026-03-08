@@ -97,8 +97,8 @@ def classify_product():
         # 2. Resize to 224×224 (what the model expects)
         img = img.resize((224, 224), Image.BILINEAR)
 
-        # 3. Normalise to [0, 1] float32
-        img_array = np.array(img, dtype=np.float32) / 255.0  # shape: (224, 224, 3)
+        # 3. Convert to float32 (EfficientNet expects [0, 255] range, NOT normalized)
+        img_array = np.array(img, dtype=np.float32)           # shape: (224, 224, 3)
         img_array = np.expand_dims(img_array, axis=0)         # shape: (1, 224, 224, 3)
 
         # 4. Run inference

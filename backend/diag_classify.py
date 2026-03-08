@@ -62,7 +62,7 @@ def test_inference(interpreter, class_names):
         decoded_img = Image.open(BytesIO(img_bytes)).convert("RGB")
         decoded_img = decoded_img.resize((224, 224), Image.Resampling.BILINEAR if hasattr(Image, "Resampling") else Image.BILINEAR)
         
-        img_array = np.array(decoded_img, dtype=np.float32) / 255.0
+        img_array = np.array(decoded_img, dtype=np.float32)
         img_array = np.expand_dims(img_array, axis=0)
         
         input_details = interpreter.get_input_details()
