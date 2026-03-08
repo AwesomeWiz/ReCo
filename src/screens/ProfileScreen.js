@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useContext } from "react";
 import {
   View,
   StyleSheet,
@@ -16,6 +16,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import AppText from "../components/AppText";
 import api from "../api/api";
+import { CartContext } from "../context/CartContext";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -57,9 +58,6 @@ export default function ProfileScreen({ navigation }) {
   const [phone, setPhone] = useState("");
   const [totalItems, setTotalItems] = useState(null);
   const [totalSales, setTotalSales] = useState(null);
-  const [upiId, setUpiId] = useState("");
-  const [showUpiModal, setShowUpiModal] = useState(false);
-  const [tempUpi, setTempUpi] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -110,8 +108,20 @@ export default function ProfileScreen({ navigation }) {
         text: "Log out",
         style: "destructive",
         onPress: async () => {
-          await AsyncStorage.multiRemove(["token", "store_name", "state", "district", "country", "phone"]);
-          navigation.replace("Login");
+          await AsyncStorage.multiRemove([
+            "token",
+            "store_name",
+            "state",
+            "district",
+            "country",
+            "phone",
+            "upi_id"
+          ]);
+          clearCart();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" }],
+          });
         },
       },
     ]);

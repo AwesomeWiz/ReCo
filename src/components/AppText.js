@@ -11,7 +11,7 @@ export default function AppText({
   return (
     <Text
       style={[
-        { fontFamily: fonts[font] || fonts.regular },
+        { fontFamily: fonts[font] || fonts.regular, color: "#1a1a1a" },
         style,
       ]}
       {...props}

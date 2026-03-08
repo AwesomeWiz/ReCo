@@ -140,7 +140,41 @@ def barcode_lookup(user_id):
 
 
 # ─────────────────────────────────────────────
-# UPDATE STOCK
+# UPDATE PRODUCT (Full Update)
+# ─────────────────────────────────────────────
+@inventory_bp.route("/inventory/<int:item_id>", methods=["PUT"])
+@token_required
+def update_inventory_item(user_id, item_id):
+    data = request.json
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        name = data.get("product_name")
+        category = data.get("category")
+        price = data.get("price")
+        stock = data.get("stock")
+        barcode = data.get("barcode")
+
+        cur.execute("""
+            UPDATE inventory
+            SET product_name = %s, category = %s, price = %s, stock = %s, barcode = %s
+            WHERE id = %s AND shop_id = %s
+        """, (name, category, price, stock, barcode, item_id, user_id))
+
+        conn.commit()
+        return jsonify({"message": "Product updated successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─────────────────────────────────────────────
+# UPDATE STOCK ONLY (Keep for backwards compatibility)
 # ─────────────────────────────────────────────
 @inventory_bp.route("/inventory/update-stock", methods=["PUT"])
 @token_required
