@@ -94,7 +94,10 @@ export default function ScanScreen({ navigation, route }) {
       const res = await api.post("/classify", { image: resized.base64 });
       setPrediction(res.data);
 
-      if (confidence >= 0.25) {
+      const conf = res.data.confidence || 0;
+      console.log(`[ScanScreen] Predicted: ${res.data.productName} (${Math.round(conf * 100)}%) | InInv: ${res.data.inInventory}`);
+
+      if (conf >= 0.25) {
         setIsLocked(true);
         isLockedRef.current = true;
       }
