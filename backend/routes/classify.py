@@ -99,7 +99,6 @@ def classify_product(user_id):
         img = img.resize((224, 224), Image.BILINEAR)
         img_array = np.array(img, dtype=np.float32)
         img_array = np.expand_dims(img_array, axis=0)
-
         # 2. Inference
         input_details = _interpreter.get_input_details()
         output_details = _interpreter.get_output_details()
@@ -111,24 +110,17 @@ def classify_product(user_id):
         best_idx = int(np.argmax(probs))
         confidence = float(probs[best_idx])
 
-        # 3. Map Index to Name
-        # Based on analysis, Model Index i matches labelMapping Key str(i)
-        # However, labelMapping starts at "1", and class_names[1] matches Key "1"
-        # So it's safe to assume: name = mapping[str(best_idx)]
-        identifer = str(best_idx)
-        display_name = _label_mapping.get(identifer)
+        # 3. Map Index to Name using class_names.json (Original Source of Truth for Model)
+        slug = _class_names[best_idx] if best_idx < len(_class_names) else f"Product_{best_idx}"
         
-        # Fallback to slugs if mapping is missing
-        if not display_name:
-             display_name = _class_names[best_idx] if best_idx < len(_class_names) else f"Product_{best_idx}"
-             # Clean up underscores for searching if needed
-             display_name = display_name.replace("_", " ")
+        # Convert slug to a searchable/display name (matches inventory names)
+        display_name = slug.replace("_", " ")
 
-        # 4. Inventory Lookup (Database source of truth)
+        # 4. Inventory Lookup (Database source of truth for pricing/availability)
         conn = get_connection()
         cur = conn.cursor()
         
-        # We search by name. The identified display_name should match product_name in inventory.
+        # Search by the processed name
         cur.execute("""
             SELECT product_name, category, price, stock, barcode
             FROM inventory
@@ -139,6 +131,13 @@ def classify_product(user_id):
         inv_item = cur.fetchone()
         cur.close()
         conn.close()
+
+        # 5. Top 3 Logging (as requested)
+        print(f"[classify] Prediction: {display_name} ({confidence:.4f})")
+        top_indices = np.argsort(probs)[-3:][::-1]
+        for i in top_indices:
+            name = _class_names[i] if i < len(_class_names) else f"class_{i}"
+            print(f"  - {name}: {probs[i]:.4f}")
 
         result = {
             "productName": display_name,
@@ -153,14 +152,12 @@ def classify_product(user_id):
         if inv_item:
             result.update({
                 "inInventory": True,
-                "productName": inv_item["product_name"], # Use exact DB name
+                "productName": inv_item["product_name"],
                 "price": float(inv_item["price"]),
                 "category": inv_item["category"],
                 "stock": inv_item["stock"],
                 "barcode": inv_item["barcode"]
             })
-
-        print(f"[classify] shop:{user_id} pred:{display_name} ({confidence:.2f}) inInv:{result['inInventory']}")
 
         return jsonify(result)
 
