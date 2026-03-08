@@ -93,7 +93,7 @@ export default function ScanScreen({ navigation, route }) {
 
       setPrediction({ productName, confidence });
 
-      if (confidence >= 0.50) {
+      if (confidence >= 0.20) {
         setIsLocked(true);
         isLockedRef.current = true;
       }
