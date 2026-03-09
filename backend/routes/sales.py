@@ -61,6 +61,7 @@ def add_item_to_transaction(user_id):
         transaction_id = data["transaction_id"]
         product_name = data["product_name"]
         category = data.get("category", "")
+        barcode = data.get("barcode", None)
         price = data["price"]
         quantity = data["quantity"]
         total = data["total"]
@@ -81,32 +82,76 @@ def add_item_to_transaction(user_id):
         if not txn:
             return jsonify({"error": "Invalid or completed transaction"}), 400
 
-        cur.execute("""
-            INSERT INTO sales (
-                shop_id,
+        # ── Check if item already exists in this transaction ──
+        if barcode:
+            cur.execute("""
+                SELECT id, quantity, total FROM sales 
+                WHERE transaction_id = %s AND barcode = %s
+            """, (transaction_id, barcode))
+        else:
+            cur.execute("""
+                SELECT id, quantity, total FROM sales 
+                WHERE transaction_id = %s AND product_name = %s AND barcode IS NULL
+            """, (transaction_id, product_name))
+        
+        existing_item = cur.fetchone()
+
+        if existing_item:
+            # ── Update existing record ──
+            new_qty = existing_item["quantity"] + quantity
+            new_total = float(existing_item["total"]) + total
+            
+            cur.execute("""
+                UPDATE sales 
+                SET quantity = %s, total = %s 
+                WHERE id = %s
+            """, (new_qty, new_total, existing_item["id"]))
+        else:
+            # ── Insert new sale record ──
+            cur.execute("""
+                INSERT INTO sales (
+                    shop_id,
+                    product_name,
+                    category,
+                    barcode,
+                    price,
+                    quantity,
+                    total,
+                    transaction_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                user_id,
                 product_name,
                 category,
+                barcode,
                 price,
                 quantity,
                 total,
                 transaction_id
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            user_id,
-            product_name,
-            category,
-            price,
-            quantity,
-            total,
-            transaction_id
-        ))
+            ))
 
+        # ── Update transaction total ──
         cur.execute("""
             UPDATE transactions
             SET total = total + %s
             WHERE id = %s AND shop_id = %s
         """, (total, transaction_id, user_id))
+
+        # ── Deduct from inventory stock ──
+        if barcode:
+            cur.execute("""
+                UPDATE inventory
+                SET stock = GREATEST(stock - %s, 0)
+                WHERE shop_id = %s AND barcode = %s
+            """, (quantity, user_id, barcode))
+        else:
+            cur.execute("""
+                UPDATE inventory
+                SET stock = GREATEST(stock - %s, 0)
+                WHERE shop_id = %s AND product_name = %s
+                LIMIT 1
+            """, (quantity, user_id, product_name))
 
         conn.commit()
 
@@ -116,6 +161,115 @@ def add_item_to_transaction(user_id):
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─────────────────────────────────────────────
+# REMOVE ITEM FROM TRANSACTION
+# ─────────────────────────────────────────────
+@sales_bp.route("/transactions/remove-item", methods=["POST"])
+@token_required
+def remove_item(user_id):
+    data = request.json
+    try:
+        transaction_id = data["transaction_id"]
+        product_name = data["product_name"]
+        barcode = data.get("barcode")
+    except KeyError as e:
+        return jsonify({"error": f"Missing field: {str(e)}"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Get the item total to deduct from transaction total
+        cur.execute("""
+            SELECT total FROM sales 
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (transaction_id, product_name, barcode, barcode))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({"error": "Item not found in transaction"}), 404
+
+        item_total = float(item["total"])
+
+        # Delete from sales
+        cur.execute("""
+            DELETE FROM sales 
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (transaction_id, product_name, barcode, barcode))
+
+        # Update transaction total
+        cur.execute("""
+            UPDATE transactions
+            SET total = GREATEST(total - %s, 0)
+            WHERE id = %s AND shop_id = %s
+        """, (item_total, transaction_id, user_id))
+
+        conn.commit()
+        return jsonify({"message": "Item removed"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# ─────────────────────────────────────────────
+# UPDATE ITEM QUANTITY
+# ─────────────────────────────────────────────
+@sales_bp.route("/transactions/update-item-qty", methods=["POST"])
+@token_required
+def update_item_qty(user_id):
+    data = request.json
+    try:
+        transaction_id = data["transaction_id"]
+        product_name = data["product_name"]
+        barcode = data.get("barcode")
+        new_qty = data["quantity"]
+    except KeyError as e:
+        return jsonify({"error": f"Missing field: {str(e)}"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Get current item info
+        cur.execute("""
+            SELECT price, quantity, total FROM sales 
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (transaction_id, product_name, barcode, barcode))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({"error": "Item not found"}), 404
+
+        old_total = float(item["total"])
+        price = float(item["price"])
+        new_total = price * new_qty
+
+        # Update sales record
+        cur.execute("""
+            UPDATE sales 
+            SET quantity = %s, total = %s
+            WHERE transaction_id = %s AND product_name = %s AND (barcode = %s OR %s IS NULL)
+            LIMIT 1
+        """, (new_qty, new_total, transaction_id, product_name, barcode, barcode))
+
+        # Update transaction total
+        cur.execute("""
+            UPDATE transactions
+            SET total = total - %s + %s
+            WHERE id = %s AND shop_id = %s
+        """, (old_total, new_total, transaction_id, user_id))
+
+        conn.commit()
+        return jsonify({"message": "Quantity updated"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
     finally:
         cur.close()
         conn.close()
@@ -133,7 +287,8 @@ def get_transaction(user_id, transaction_id):
 
     try:
         cur.execute("""
-            SELECT id FROM transactions
+            SELECT id, transaction_code, total, created_at
+            FROM transactions
             WHERE id = %s AND shop_id = %s
         """, (transaction_id, user_id))
 
@@ -142,7 +297,7 @@ def get_transaction(user_id, transaction_id):
             return jsonify({"error": "Transaction not found"}), 404
 
         cur.execute("""
-            SELECT product_name, quantity, price, total
+            SELECT product_name, quantity, price, total, category, barcode
             FROM sales
             WHERE transaction_id = %s AND shop_id = %s
         """, (transaction_id, user_id))
@@ -153,13 +308,20 @@ def get_transaction(user_id, transaction_id):
             {
                 "description": row["product_name"],
                 "qty": row["quantity"],
-                "rate": row["price"],
-                "amount": row["total"]
+                "rate": float(row["price"]),
+                "amount": float(row["total"]),
+                "category": row["category"],
+                "barcode": row["barcode"]
             }
             for row in rows
         ]
 
-        return jsonify({"items": items}), 200
+        return jsonify({
+            "transaction_code": txn["transaction_code"],
+            "total": float(txn["total"]),
+            "created_at": txn["created_at"].isoformat() if hasattr(txn["created_at"], "isoformat") else str(txn["created_at"]),
+            "items": items
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -267,11 +429,13 @@ def get_today_sales(user_id):
 
     try:
         cur.execute("""
-            SELECT product_name, quantity, price, total
-            FROM sales
-            WHERE shop_id = %s
-              AND DATE(created_at) = CURDATE()
-            ORDER BY created_at DESC
+            SELECT s.product_name, s.quantity, s.price, s.total
+            FROM sales s
+            JOIN transactions t ON s.transaction_id = t.id
+            WHERE s.shop_id = %s
+              AND DATE(s.created_at) = CURDATE()
+              AND t.status = 'completed'
+            ORDER BY s.created_at DESC
         """, (user_id,))
 
         rows = cur.fetchall()
@@ -395,9 +559,10 @@ def forecast_sales(user_id):
 
         forecast_values = _arima_or_fallback(daily_series.values, steps=7)
 
-        last_date = daily_series.index[-1]
+        # Always anchor forecast from today so dates are never stale
+        today = datetime.date.today()
         future_dates = pd.date_range(
-            start=last_date + pd.Timedelta(days=1),
+            start=today + pd.Timedelta(days=1),
             periods=7
         )
 
@@ -442,17 +607,34 @@ def analytics_summary(user_id):
     cur = conn.cursor()
 
     try:
-        # ── Total sales & transactions ──────────────────────
+        # ── Total sales & transactions (No JOIN to avoid inflated sums) ──────────
         cur.execute(f"""
             SELECT
-                COALESCE(SUM(t.total), 0)  AS total_sales,
-                COUNT(t.id)                AS total_transactions
+                COALESCE(SUM(total), 0) AS total_sales,
+                COUNT(id)               AS total_transactions
             FROM transactions t
             WHERE t.shop_id = %s
               AND t.status = 'completed'
               AND {pf_t}
         """, (user_id,))
-        summary = cur.fetchone()
+        txn_summary = cur.fetchone()
+
+        # ── Total items sold ──────────
+        cur.execute(f"""
+            SELECT COALESCE(SUM(s.quantity), 0) AS total_items
+            FROM sales s
+            JOIN transactions t ON s.transaction_id = t.id
+            WHERE t.shop_id = %s
+              AND t.status = 'completed'
+              AND {pf_t}
+        """, (user_id,))
+        items_summary = cur.fetchone()
+
+        summary = {
+            "total_sales": txn_summary["total_sales"],
+            "total_transactions": txn_summary["total_transactions"],
+            "total_items": items_summary["total_items"]
+        }
 
         # ── Top selling product ─────────────────────────────
         cur.execute(f"""
@@ -488,8 +670,10 @@ def analytics_summary(user_id):
         """, (user_id, user_id))
         cats = cur.fetchall()
 
-        # ── Stock risk flag via ARIMA demand check ──────────
-        # Get inventory items
+        # ── Stock risk: flag AT RISK only for high or medium risk items ──
+        # Mirrors /analytics/stockout-risk thresholds:
+        #   high   → stock <= demand_7d * 0.5
+        #   medium → stock <  demand_7d
         cur.execute("""
             SELECT product_name, stock
             FROM inventory
@@ -510,17 +694,18 @@ def analytics_summary(user_id):
             sales_rows = cur.fetchall()
 
             if sales_rows:
-                dates = [r["date"] for r in sales_rows]
+                dates  = [r["date"] for r in sales_rows]
                 values = [float(r["qty"]) for r in sales_rows]
-                daily = _fill_date_gaps(dates, values)
+                daily  = _fill_date_gaps(dates, values)
                 demand_7d = sum(_arima_or_fallback(daily.values, steps=7))
-                if item["stock"] <= demand_7d:
+                stock_val = float(item["stock"])
+                # Only flag AT RISK for high or medium — mirrors stockout-risk endpoint
+                if demand_7d > 0 and stock_val < demand_7d:
                     stock_risk = True
                     break
 
-        # If no inventory defined, compute simplified risk from sales velocity
+        # If no inventory defined, fall back to sales-velocity heuristic
         if not inv_items:
-            # Check if any product sold more than 50 units in period
             cur.execute(f"""
                 SELECT SUM(s.quantity) as total_qty
                 FROM sales s
@@ -535,6 +720,7 @@ def analytics_summary(user_id):
         return jsonify({
             "total_sales":        round(float(summary["total_sales"]), 2),
             "total_transactions": int(summary["total_transactions"]),
+            "total_items":        int(summary["total_items"]),
             "top_product":        top["product_name"] if top else "N/A",
             "stock_risk":         stock_risk,
             "categories":         cats,
@@ -559,14 +745,27 @@ def demand_forecast(user_id):
     cur = conn.cursor()
 
     try:
-        # Distinct products sold by this shop
+        # Use inventory as the source so every stocked item gets a forecast
+        # (not just products that have been sold before)
         cur.execute("""
-            SELECT DISTINCT product_name
-            FROM sales
+            SELECT product_name
+            FROM inventory
             WHERE shop_id = %s
             ORDER BY product_name
         """, (user_id,))
-        products = [r["product_name"] for r in cur.fetchall()]
+        inv_rows = cur.fetchall()
+
+        # Fall back to distinct sold products if inventory is empty
+        if not inv_rows:
+            cur.execute("""
+                SELECT DISTINCT product_name
+                FROM sales
+                WHERE shop_id = %s
+                ORDER BY product_name
+            """, (user_id,))
+            inv_rows = cur.fetchall()
+
+        products = [r["product_name"] for r in inv_rows]
 
         result = []
         today = datetime.date.today()
@@ -586,9 +785,9 @@ def demand_forecast(user_id):
             rows = cur.fetchall()
 
             if rows:
-                dates = [r["date"] for r in rows]
+                dates  = [r["date"] for r in rows]
                 values = [float(r["qty"]) for r in rows]
-                daily = _fill_date_gaps(dates, values)
+                daily  = _fill_date_gaps(dates, values)
                 forecast = _arima_or_fallback(daily.values, steps=7)
             else:
                 forecast = [0.0] * 7

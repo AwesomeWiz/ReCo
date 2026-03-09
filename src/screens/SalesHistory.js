@@ -12,6 +12,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AppText from "../components/AppText";
 import api from "../api/api";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -45,6 +48,56 @@ export default function SalesHistoryScreen({ navigation }) {
     if (date) setSelectedDate(date);
   };
 
+  // Grand total for the day
+  const grandTotal = transactions.reduce((sum, t) => sum + Number(t.total || 0), 0);
+
+  // Download today's sales as PDF
+  const downloadDailyReport = async () => {
+    try {
+      const storeName = (await AsyncStorage.getItem("store_name")) || "My Store";
+      const state = (await AsyncStorage.getItem("state")) || "";
+
+      const rows = transactions
+        .map(
+          (txn) =>
+            `<tr>
+              <td>${txn.transaction_code}</td>
+              <td style="text-align:right">${txn.formatted_time}</td>
+              <td style="text-align:right">₹${Number(txn.total).toFixed(2)}</td>
+            </tr>`
+        )
+        .join("");
+
+      const html = `
+        <html>
+          <body style="font-family: Arial; padding: 24px;">
+            <h2 style="text-align:center; letter-spacing:3px">${storeName.toUpperCase()}</h2>
+            <p style="text-align:center; color:#666">${state.toUpperCase()}</p>
+            <hr/>
+            <h3 style="text-align:center">DAILY SALES REPORT</h3>
+            <p style="text-align:center">${displayDate}</p>
+            <hr/>
+            <table width="100%" border="1" cellspacing="0" cellpadding="8" style="border-collapse:collapse">
+              <tr style="background:#eee">
+                <th style="text-align:left">Transaction</th>
+                <th style="text-align:right">Time</th>
+                <th style="text-align:right">Amount</th>
+              </tr>
+              ${rows}
+            </table>
+            <p style="text-align:right; font-size:16px; font-weight:bold; margin-top:16px">
+              TOTAL: ₹${grandTotal.toFixed(2)}
+            </p>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri);
+    } catch (err) {
+      console.log("PDF error:", err.message);
+    }
+  };
 
   return (
     <SafeAreaView style={s.safe}>
@@ -53,12 +106,19 @@ export default function SalesHistoryScreen({ navigation }) {
           Transactions
         </AppText>
 
-        <TouchableOpacity
-          style={s.dateBtn}
-          onPress={() => setShowPicker(true)}
-        >
-          <AppText style={s.dateText}>{displayDate}</AppText>
-        </TouchableOpacity>
+        {/* Date picker + Download button row */}
+        <View style={s.topRow}>
+          <TouchableOpacity
+            style={s.dateBtn}
+            onPress={() => setShowPicker(true)}
+          >
+            <AppText style={s.dateText}>{displayDate}</AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={s.pdfBtn} onPress={downloadDailyReport}>
+            <AppText style={s.pdfText}>⬇ PDF</AppText>
+          </TouchableOpacity>
+        </View>
 
         {Platform.OS === "ios" ? (
           <Modal visible={showPicker} transparent animationType="slide">
@@ -95,34 +155,42 @@ export default function SalesHistoryScreen({ navigation }) {
             No transactions on this date.
           </AppText>
         ) : (
- transactions.map((txn) => {
-    console.log("Transaction data:", txn);
-  return (
-    <TouchableOpacity
-      key={txn.id}
-      style={s.card}
-      onPress={() =>
-        navigation.navigate("TransactionDetails", {
-          transactionId: txn.id,
-        })
-      }
-    >
-      <View>
-        <AppText font="billbold">
-          {txn.transaction_code}
-        </AppText>
-        <AppText style={s.small}>
-          {txn.formatted_time}  {/* Use pre-formatted time from backend */}
-        </AppText>
-      </View>
+          <>
+            {transactions.map((txn) => (
+              <TouchableOpacity
+                key={txn.id}
+                style={s.card}
+                onPress={() =>
+                  navigation.navigate("TransactionDetails", {
+                    transactionId: txn.id,
+                  })
+                }
+              >
+                <View>
+                  <AppText font="billbold">
+                    {txn.transaction_code}
+                  </AppText>
+                  <AppText style={s.small}>
+                    {txn.formatted_time}
+                  </AppText>
+                </View>
 
-      <AppText font="billbold" style={s.total}>
-        ₹{Number(txn.total).toFixed(2)}
-      </AppText>
-    </TouchableOpacity>
-  );
-})
+                <AppText font="billbold" style={s.total}>
+                  ₹{Number(txn.total).toFixed(2)}
+                </AppText>
+              </TouchableOpacity>
+            ))}
 
+            {/* Grand Total Footer */}
+            <View style={s.grandTotalRow}>
+              <AppText font="satoshi" style={s.grandLabel}>
+                Day Total
+              </AppText>
+              <AppText font="satoshi" style={s.grandAmount}>
+                ₹{grandTotal.toFixed(2)}
+              </AppText>
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -134,16 +202,29 @@ const s = StyleSheet.create({
   content: { padding: 16 },
   title: { fontSize: 32, marginBottom: 16 },
 
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 20,
+  },
+
   dateBtn: {
     backgroundColor: WHITE,
     padding: 12,
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: ACCENT,
-    marginBottom: 20,
-    alignSelf: "flex-start",
   },
   dateText: { color: ACCENT, fontWeight: "600" },
+
+  pdfBtn: {
+    backgroundColor: ACCENT,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+  },
+  pdfText: { color: "#fff", fontWeight: "600" },
 
   card: {
     backgroundColor: WHITE,
@@ -158,6 +239,19 @@ const s = StyleSheet.create({
   total: { fontSize: 18 },
   small: { fontSize: 12, color: "#666" },
   empty: { textAlign: "center", marginTop: 30 },
+
+  grandTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#000",
+    padding: 16,
+    borderRadius: 18,
+    marginTop: 4,
+  },
+  grandLabel: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  grandAmount: { color: "#fff", fontSize: 20, fontWeight: "700" },
+
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
   modalContent: { backgroundColor: WHITE, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   done: { textAlign: "center", marginTop: 10, color: ACCENT },

@@ -20,7 +20,7 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     try {
 
-      const res = await axios.post("http://10.0.9.142:5000/login", {
+      const res = await axios.post("http://10.0.8.90:5000/login", {
         phone,
         password
       });
@@ -31,12 +31,15 @@ export default function LoginScreen({ navigation }) {
       await AsyncStorage.setItem("store_name", res.data.store_name || "");
       await AsyncStorage.setItem("state", res.data.state || "");
       await AsyncStorage.setItem("country", res.data.country || "");
+      await AsyncStorage.setItem("district", res.data.district || "");
 
       const saved = await AsyncStorage.getItem("token");
       console.log("Saved token:", saved);
 
-      navigation.replace("Main");
-
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Main" }],
+      });
     } catch (err) {
       Alert.alert("Error", "Invalid credentials");
     }

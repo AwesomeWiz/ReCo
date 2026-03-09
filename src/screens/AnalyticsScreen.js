@@ -6,69 +6,35 @@ import {
   ActivityIndicator,
   Dimensions,
   StyleSheet,
+  SafeAreaView,
   RefreshControl,
 } from "react-native";
-import { LineChart, PieChart } from "react-native-chart-kit";
-import { LinearGradient } from "expo-linear-gradient";
+import { LineChart } from "react-native-chart-kit";
 import { Ionicons } from "@expo/vector-icons";
 import AppText from "../components/AppText";
 import api from "../api/api";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
-// ── Colors ──────────────────────────────────────────────────────────
-const C = {
-  bg: "#0F1523",
-  card: "#1A2236",
-  cardBord: "#263050",
-  accent: "#4A80F5",
-  accent2: "#7B5EA7",
-  textMain: "#E8EDF5",
-  textSub: "#7A8AAE",
-  high: "#FF4757",
-  medium: "#FFA502",
-  low: "#2ED573",
-  none: "#4A80F5",
-  cat: ["#4A80F5", "#FF6B9D", "#FFD166", "#06D6A0", "#9B5DE5"],
+const BG = "#F5F1E8";
+const WHITE = "#FFFFFF";
+const ACCENT = "#3A6FF7";
+const DANGER = "#DC2626";
+const WARN = "#D97706";
+const OK = "#16A34A";
+const TEXT = "#111111";
+const MUTED = "#888888";
+const BORDER = "#EBEBEB";
+
+// ─── Risk level config ────────────────────────────────────────────────────────
+const RISK_CFG = {
+  high: { color: DANGER, label: "High Risk", dot: "#DC2626" },
+  medium: { color: WARN, label: "Medium", dot: "#D97706" },
+  low: { color: OK, label: "Low", dot: "#16A34A" },
+  none: { color: ACCENT, label: "Safe", dot: "#3A6FF7" },
 };
 
-// ── Reusable Card ────────────────────────────────────────────────────
-function Card({ children, style }) {
-  return (
-    <View style={[styles.card, style]}>
-      {children}
-    </View>
-  );
-}
-
-// ── Section header ───────────────────────────────────────────────────
-function SectionHeader({ icon, title }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Ionicons name={icon} size={18} color={C.accent} style={{ marginRight: 8 }} />
-      <AppText font="bold" style={styles.sectionTitle}>{title}</AppText>
-    </View>
-  );
-}
-
-// ── Risk badge ───────────────────────────────────────────────────────
-function RiskBadge({ level }) {
-  const cfg = {
-    high: { bg: "#FF47571A", border: C.high, text: "HIGH RISK", icon: "alert-circle" },
-    medium: { bg: "#FFA5021A", border: C.medium, text: "MEDIUM", icon: "warning" },
-    low: { bg: "#2ED5731A", border: C.low, text: "LOW", icon: "checkmark-circle" },
-    none: { bg: "#4A80F51A", border: C.none, text: "SAFE", icon: "shield-checkmark" },
-  }[level] || { bg: "#4A80F51A", border: C.none, text: "SAFE", icon: "shield-checkmark" };
-
-  return (
-    <View style={[styles.badge, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-      <Ionicons name={cfg.icon} size={11} color={cfg.border} style={{ marginRight: 3 }} />
-      <AppText font="bold" style={[styles.badgeText, { color: cfg.border }]}>{cfg.text}</AppText>
-    </View>
-  );
-}
-
-// ── Main Screen ──────────────────────────────────────────────────────
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AnalyticsScreen() {
   const [period, setPeriod] = useState("daily");
   const [summary, setSummary] = useState(null);
@@ -88,20 +54,15 @@ export default function AnalyticsScreen() {
         api.get("/analytics/demand"),
         api.get("/analytics/stockout-risk"),
       ]);
-
-      // Each result is independent — set data if fulfilled, null if rejected
       setSummary(sumRes.status === "fulfilled" ? sumRes.value.data : null);
       setForecast(fcastRes.status === "fulfilled" ? fcastRes.value.data : null);
       setDemand(demRes.status === "fulfilled" ? demRes.value.data : null);
       setStockout(soRes.status === "fulfilled" ? soRes.value.data : null);
 
-      // Only show error if ALL endpoints failed
-      const allFailed = [sumRes, fcastRes, demRes, soRes].every(
-        (r) => r.status === "rejected"
-      );
+      const allFailed = [sumRes, fcastRes, demRes, soRes].every(r => r.status === "rejected");
       if (allFailed) {
-        const firstErr = sumRes.reason;
-        setError(firstErr?.response?.data?.error || firstErr?.message || "Failed to load analytics");
+        const e = sumRes.reason;
+        setError(e?.response?.data?.error || e?.message || "Failed to load analytics");
       }
     } catch (e) {
       setError(e.message || "Failed to load analytics");
@@ -112,291 +73,346 @@ export default function AnalyticsScreen() {
   }, [period]);
 
   useEffect(() => { setLoading(true); fetchAll(period); }, [period]);
-
   const onRefresh = () => { setRefreshing(true); fetchAll(period); };
 
-  // ── Period bar ──────────────────────────────────────────────────────
-  const PeriodBar = () => (
-    <View style={styles.periodBar}>
-      {[["Daily", "daily"], ["Weekly", "weekly"], ["Monthly", "monthly"]].map(([lbl, val]) => (
-        <TouchableOpacity
-          key={val}
-          onPress={() => setPeriod(val)}
-          style={[styles.periodBtn, period === val && styles.periodBtnActive]}
-        >
-          <AppText
-            font={period === val ? "bold" : "regular"}
-            style={[styles.periodBtnText, period === val && styles.periodBtnTextActive]}
-          >
-            {lbl}
-          </AppText>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  // ── Loading ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={C.accent} />
-        <AppText style={[styles.subText, { marginTop: 16 }]}>Running ARIMA models…</AppText>
-      </View>
+      <SafeAreaView style={s.safe}>
+        <View style={s.centered}>
+          <ActivityIndicator size="large" color={ACCENT} />
+          <AppText style={s.loadText}>Calculating forecasts…</AppText>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // ── Error ───────────────────────────────────────────────────────────
   if (error) {
     return (
-      <View style={styles.centered}>
-        <Ionicons name="cloud-offline" size={48} color={C.high} />
-        <AppText style={[styles.subText, { marginTop: 12, color: C.high }]}>{error}</AppText>
-        <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); fetchAll(); }}>
-          <AppText font="bold" style={{ color: "#fff" }}>Retry</AppText>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={s.safe}>
+        <View style={s.centered}>
+          <Ionicons name="cloud-offline-outline" size={40} color={MUTED} />
+          <AppText style={s.errorText}>{error}</AppText>
+          <TouchableOpacity style={s.retryBtn} onPress={() => { setLoading(true); fetchAll(); }}>
+            <AppText style={s.retryText}>Try again</AppText>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // ── Revenue forecast chart data ──────────────────────────────────────
-  const chartData = forecast?.length > 0
-    ? {
-      labels: forecast.map((d) => d.date.slice(5)),          // "MM-DD"
-      datasets: [{ data: forecast.map((d) => d.predicted_sales) }],
-    }
-    : null;
+  const chartData = forecast?.length > 0 ? {
+    labels: forecast.map(d => d.date.slice(5)),
+    datasets: [{ data: forecast.map(d => Math.max(0, d.predicted_sales)) }],
+  } : null;
 
-  // ── Pie data ─────────────────────────────────────────────────────────
-  const pieData = summary?.categories?.map((item, i) => ({
-    name: item.category || "Other",
-    population: parseFloat(item.percentage) || 0,
-    color: C.cat[i % C.cat.length],
-    legendFontColor: C.textSub,
-    legendFontSize: 11,
-  })) || [];
+  const activeDemand = (demand || []).filter(p => p.total_predicted_7d > 0);
+  const avgPerSale = summary?.total_transactions > 0
+    ? Math.round(summary.total_sales / summary.total_transactions)
+    : 0;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={{ paddingBottom: 40 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
-    >
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <LinearGradient
-        colors={["#1A2A5E", "#0F1523"]}
-        style={styles.header}
+    <SafeAreaView style={s.safe}>
+      <ScrollView
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ACCENT} />}
       >
-        <AppText font="bold" style={styles.headerTitle}>Analytics</AppText>
-        <AppText style={styles.headerSub}>AI-powered insights for your store</AppText>
-      </LinearGradient>
 
-      <View style={styles.content}>
-        {/* ── Period toggle ─────────────────────────────────────────── */}
-        <PeriodBar />
+        {/* ── Page title ─────────────────────────────────────────────────────── */}
+        <AppText font="satoshi" style={s.pageTitle}>Analytics</AppText>
 
-        {/* ── Summary cards ─────────────────────────────────────────── */}
+        {/* ── Period selector ────────────────────────────────────────────────── */}
+        <View style={s.periodRow}>
+          {[["Daily", "daily"], ["Weekly", "weekly"], ["Monthly", "monthly"]].map(([lbl, val]) => (
+            <TouchableOpacity
+              key={val}
+              onPress={() => setPeriod(val)}
+              style={[s.periodChip, period === val && s.periodChipActive]}
+            >
+              <AppText style={[s.periodLabel, period === val && s.periodLabelActive]}>
+                {lbl}
+              </AppText>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── Hero revenue ───────────────────────────────────────────────────── */}
         {summary && (
-          <>
-            <View style={styles.metricsRow}>
-              <LinearGradient colors={["#1E3A8A", "#2254C5"]} style={styles.metricCard}>
-                <Ionicons name="cash" size={22} color="#fff" style={{ marginBottom: 6 }} />
-                <AppText font="bold" style={styles.metricValue}>
-                  ₹{summary.total_sales?.toLocaleString("en-IN")}
-                </AppText>
-                <AppText style={styles.metricLabel}>Total Revenue</AppText>
-              </LinearGradient>
+          <View style={s.heroCard}>
+            <AppText style={s.heroLabel}>Total Revenue</AppText>
+            <AppText font="bold" style={s.heroValue}>
+              ₹{Number(summary.total_sales).toLocaleString("en-IN")}
+            </AppText>
 
-              <LinearGradient colors={["#4B1D96", "#7B5EA7"]} style={styles.metricCard}>
-                <Ionicons name="receipt" size={22} color="#fff" style={{ marginBottom: 6 }} />
-                <AppText font="bold" style={styles.metricValue}>
-                  {summary.total_transactions}
-                </AppText>
-                <AppText style={styles.metricLabel}>Transactions</AppText>
-              </LinearGradient>
+            {/* ── 3 sub-stats ── */}
+            <View style={s.subStatsRow}>
+              <View style={s.subStat}>
+                <AppText font="bold" style={s.subStatValue}>{summary.total_transactions}</AppText>
+                <AppText style={s.subStatLabel}>Sales</AppText>
+              </View>
+              <View style={s.subStatDivider} />
+              <View style={s.subStat}>
+                <AppText font="bold" style={s.subStatValue}>{summary.total_items ?? 0}</AppText>
+                <AppText style={s.subStatLabel}>Items sold</AppText>
+              </View>
+              <View style={s.subStatDivider} />
+              <View style={s.subStat}>
+                <AppText font="bold" style={s.subStatValue}>₹{avgPerSale.toLocaleString("en-IN")}</AppText>
+                <AppText style={s.subStatLabel}>Avg / sale</AppText>
+              </View>
             </View>
 
-            <Card style={{ marginBottom: 14 }}>
-              <View style={styles.rowBetween}>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="trophy" size={18} color={C.medium} style={{ marginRight: 8 }} />
-                  <AppText style={styles.subText}>Top Product</AppText>
-                </View>
-                <AppText font="bold" style={styles.topProduct}>{summary.top_product}</AppText>
+            {/* ── Top product + risk ── */}
+            <View style={s.heroFooter}>
+              <View style={s.heroFooterItem}>
+                <AppText style={s.heroFooterLabel}>Top product</AppText>
+                <AppText font="bold" style={s.heroFooterValue} numberOfLines={1}>
+                  {summary.top_product ?? "N/A"}
+                </AppText>
               </View>
-              <View style={[styles.rowBetween, { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: C.cardBord }]}>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="cube" size={18} color={summary.stock_risk ? C.high : C.low} style={{ marginRight: 8 }} />
-                  <AppText style={styles.subText}>Stockout Risk</AppText>
-                </View>
-                <View style={[styles.badge, {
-                  backgroundColor: summary.stock_risk ? "#FF47571A" : "#2ED5731A",
-                  borderColor: summary.stock_risk ? C.high : C.low,
-                }]}>
-                  <AppText font="bold" style={[styles.badgeText, { color: summary.stock_risk ? C.high : C.low }]}>
-                    {summary.stock_risk ? "⚠ AT RISK" : "✓ SAFE"}
-                  </AppText>
-                </View>
+              <View style={[s.riskPill, { backgroundColor: summary.stock_risk ? "#FEE2E2" : "#DCFCE7" }]}>
+                <View style={[s.riskDot, { backgroundColor: summary.stock_risk ? DANGER : OK }]} />
+                <AppText style={[s.riskPillText, { color: summary.stock_risk ? DANGER : OK }]}>
+                  {summary.stock_risk ? "At risk" : "Stock OK"}
+                </AppText>
               </View>
-            </Card>
-          </>
+            </View>
+          </View>
         )}
 
-        {/* ── Revenue Forecast (ARIMA) ──────────────────────────────── */}
+        {/* ── Revenue forecast ───────────────────────────────────────────────── */}
         {chartData && (
-          <Card style={{ marginBottom: 14 }}>
-            <SectionHeader icon="trending-up" title="7-Day Revenue Forecast" />
-            <AppText style={[styles.subText, { marginBottom: 12 }]}>
-              ARIMA model prediction based on historical sales
-            </AppText>
+          <View style={s.section}>
+            <View style={s.sectionHead}>
+              <AppText font="bold" style={s.sectionTitle}>Revenue Forecast</AppText>
+              <AppText style={s.sectionSub}>Next 7 days · ARIMA</AppText>
+            </View>
             <LineChart
               data={chartData}
-              width={SCREEN_W - 72}
-              height={180}
+              width={SCREEN_W - 48}
+              height={160}
               chartConfig={{
-                backgroundGradientFrom: C.card,
-                backgroundGradientTo: C.card,
+                backgroundGradientFrom: WHITE,
+                backgroundGradientTo: WHITE,
                 decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(74, 128, 245, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(122, 138, 174, ${opacity})`,
-                propsForDots: { r: "4", strokeWidth: "2", stroke: C.accent },
+                color: (o = 1) => `rgba(58,111,247,${o})`,
+                labelColor: (o = 1) => `rgba(136,136,136,${o})`,
+                propsForDots: { r: "3", strokeWidth: "2", stroke: ACCENT },
+                propsForBackgroundLines: { stroke: BORDER },
               }}
               bezier
-              style={{ borderRadius: 8, marginLeft: -10 }}
-              withInnerLines={false}
+              style={{ borderRadius: 12, marginLeft: -10 }}
+              withInnerLines={true}
               withOuterLines={false}
+              withShadow={false}
             />
-          </Card>
+          </View>
         )}
 
-        {/* ── Stockout Risk List ────────────────────────────────────── */}
+        {/* ── Stockout risk ──────────────────────────────────────────────────── */}
         {stockout && stockout.length > 0 && (
-          <Card style={{ marginBottom: 14 }}>
-            <SectionHeader icon="alert-circle" title="Stockout Risk Analysis" />
-            {stockout.map((item, i) => (
+          <View style={s.section}>
+            <View style={s.sectionHead}>
+              <AppText font="bold" style={s.sectionTitle}>Inventory Risk</AppText>
+              <AppText style={s.sectionSub}>Based on 7-day demand</AppText>
+            </View>
+            {stockout.map((item, i) => {
+              const cfg = RISK_CFG[item.risk_level] || RISK_CFG.none;
+              return (
+                <View
+                  key={i}
+                  style={[
+                    s.riskRow,
+                    { borderLeftColor: cfg.dot },
+                    i < stockout.length - 1 && { marginBottom: 8 },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <AppText font="bold" style={s.riskName} numberOfLines={1}>{item.product_name}</AppText>
+                    <AppText style={s.riskMeta}>
+                      Stock {item.stock} · ~{item.predicted_demand_7d} needed
+                      {item.days_until_stockout != null ? ` · ${item.days_until_stockout}d left` : ""}
+                    </AppText>
+                  </View>
+                  <AppText style={[s.riskLabel, { color: cfg.color }]}>{cfg.label}</AppText>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Demand forecast ────────────────────────────────────────────────── */}
+        {activeDemand.length > 0 && (
+          <View style={s.section}>
+            <View style={s.sectionHead}>
+              <AppText font="bold" style={s.sectionTitle}>Demand Forecast</AppText>
+              <AppText style={s.sectionSub}>Next 7 days per product</AppText>
+            </View>
+            {activeDemand.map((prod, i) => (
               <View
                 key={i}
                 style={[
-                  styles.riskRow,
-                  i < stockout.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.cardBord },
+                  s.demandRow,
+                  i < activeDemand.length - 1 && { borderBottomWidth: 1, borderBottomColor: BORDER },
                 ]}
               >
-                <View style={{ flex: 1 }}>
-                  <AppText font="bold" style={styles.riskName}>{item.product_name}</AppText>
-                  <AppText style={styles.riskDetail}>
-                    Stock: {item.stock} · Demand/7d: ~{item.predicted_demand_7d}
-                    {item.days_until_stockout != null
-                      ? `\n⏳ ~${item.days_until_stockout} days left`
-                      : ""}
+                <AppText style={s.demandName} numberOfLines={1}>{prod.product_name}</AppText>
+                <View style={s.demandChip}>
+                  <AppText font="bold" style={s.demandChipText}>
+                    {prod.total_predicted_7d} units
                   </AppText>
                 </View>
-                <RiskBadge level={item.risk_level} />
               </View>
             ))}
-          </Card>
+          </View>
         )}
 
-        {stockout && stockout.length === 0 && (
-          <Card style={{ marginBottom: 14 }}>
-            <SectionHeader icon="cube" title="Stockout Risk Analysis" />
-            <AppText style={[styles.subText, { textAlign: "center", paddingVertical: 12 }]}>
-              No inventory items configured yet.{"\n"}Add products to inventory to enable risk analysis.
-            </AppText>
-          </Card>
-        )}
-
-        {/* ── Demand Forecast per product ───────────────────────────── */}
-        {demand && demand.length > 0 && (
-          <Card style={{ marginBottom: 14 }}>
-            <SectionHeader icon="bar-chart" title="Demand Forecast (Next 7 Days)" />
-            <AppText style={[styles.subText, { marginBottom: 12 }]}>
-              Per-product ARIMA demand prediction
-            </AppText>
-            {demand.map((prod, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.demandRow,
-                  i < demand.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.cardBord },
-                ]}
-              >
-                <View style={styles.demandLeft}>
-                  <Ionicons name="cube-outline" size={14} color={C.accent} style={{ marginRight: 6 }} />
-                  <AppText font="bold" style={styles.demandName}>{prod.product_name}</AppText>
-                </View>
-                <View style={styles.demandRight}>
-                  <AppText font="bold" style={styles.demandQty}>{prod.total_predicted_7d}</AppText>
-                  <AppText style={styles.demandUnit}> units</AppText>
-                </View>
-              </View>
-            ))}
-          </Card>
-        )}
-
-        {/* ── Category Pie ─────────────────────────────────────────── */}
-        {pieData.length > 0 && (
-          <Card>
-            <SectionHeader icon="pie-chart" title="Sales by Category" />
-            <PieChart
-              data={pieData}
-              width={SCREEN_W - 72}
-              height={180}
-              chartConfig={{
-                color: (opacity = 1) => `rgba(255,255,255,${opacity})`,
-              }}
-              accessor="population"
-              backgroundColor="transparent"
-              paddingLeft="10"
-              absolute={false}
-              style={{ marginLeft: -16 }}
-            />
-          </Card>
-        )}
-      </View>
-    </ScrollView>
+        <View style={{ height: 20 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
-  centered: { flex: 1, backgroundColor: C.bg, justifyContent: "center", alignItems: "center", padding: 24 },
-  header: { paddingTop: 56, paddingBottom: 28, paddingHorizontal: 24 },
-  headerTitle: { fontSize: 28, color: C.textMain, marginBottom: 4 },
-  headerSub: { fontSize: 13, color: C.textSub },
-  content: { padding: 16 },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: BG },
+  content: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
 
-  periodBar: { flexDirection: "row", backgroundColor: C.card, borderRadius: 12, padding: 4, marginBottom: 16, borderWidth: 1, borderColor: C.cardBord },
-  periodBtn: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 10 },
-  periodBtnActive: { backgroundColor: C.accent },
-  periodBtnText: { fontSize: 13, color: C.textSub },
-  periodBtnTextActive: { color: "#fff" },
+  pageTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: TEXT,
+    letterSpacing: -0.5,
+    marginBottom: 16,
+  },
 
-  metricsRow: { flexDirection: "row", gap: 12, marginBottom: 14 },
-  metricCard: { flex: 1, borderRadius: 16, padding: 16, alignItems: "center" },
-  metricValue: { fontSize: 22, color: "#fff", marginBottom: 2 },
-  metricLabel: { fontSize: 11, color: "rgba(255,255,255,0.7)" },
+  // ── Period selector ──
+  periodRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 20,
+  },
+  periodChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  periodChipActive: {
+    backgroundColor: TEXT,
+    borderColor: TEXT,
+  },
+  periodLabel: { fontSize: 13, color: MUTED },
+  periodLabelActive: { color: WHITE },
 
-  card: { backgroundColor: C.card, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.cardBord },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  subText: { fontSize: 12, color: C.textSub },
-  topProduct: { fontSize: 15, color: C.textMain },
+  // ── Hero card ──
+  heroCard: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 22,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  heroLabel: { fontSize: 12, color: MUTED, marginBottom: 4, letterSpacing: 0.3 },
+  heroValue: { fontSize: 36, color: TEXT, letterSpacing: -1, marginBottom: 20 },
 
-  sectionHeader: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  sectionTitle: { fontSize: 15, color: C.textMain },
+  subStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 18,
+    paddingBottom: 18,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 18,
+  },
+  subStat: { flex: 1, alignItems: "center" },
+  subStatValue: { fontSize: 18, color: TEXT, marginBottom: 2 },
+  subStatLabel: { fontSize: 11, color: MUTED },
+  subStatDivider: { width: 1, height: 28, backgroundColor: BORDER },
 
-  badge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  badgeText: { fontSize: 10 },
+  heroFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  heroFooterItem: {},
+  heroFooterLabel: { fontSize: 11, color: MUTED, marginBottom: 2 },
+  heroFooterValue: { fontSize: 13, color: TEXT, maxWidth: 180 },
 
-  riskRow: { paddingVertical: 12, flexDirection: "row", alignItems: "center" },
-  riskName: { fontSize: 14, color: C.textMain, marginBottom: 3 },
-  riskDetail: { fontSize: 11, color: C.textSub, lineHeight: 16 },
+  riskPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 5,
+  },
+  riskDot: { width: 6, height: 6, borderRadius: 3 },
+  riskPillText: { fontSize: 12, fontWeight: "600" },
 
-  demandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 },
-  demandLeft: { flexDirection: "row", alignItems: "center" },
-  demandName: { fontSize: 13, color: C.textMain },
-  demandRight: { flexDirection: "row", alignItems: "baseline" },
-  demandQty: { fontSize: 16, color: C.accent },
-  demandUnit: { fontSize: 11, color: C.textSub },
+  // ── Sections ──
+  section: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  sectionTitle: { fontSize: 15, color: TEXT },
+  sectionSub: { fontSize: 11, color: MUTED },
 
-  retryBtn: { marginTop: 16, backgroundColor: C.accent, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 10 },
+  // ── Risk rows ──
+  riskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderRadius: 4,
+    backgroundColor: "#FAFAFA",
+    marginBottom: 8,
+  },
+  riskName: { fontSize: 13, color: TEXT, marginBottom: 2 },
+  riskMeta: { fontSize: 11, color: MUTED },
+  riskLabel: { fontSize: 12, fontWeight: "700", marginLeft: 8 },
+
+  // ── Demand rows ──
+  demandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 11,
+  },
+  demandName: { fontSize: 13, color: TEXT, flex: 1, marginRight: 10 },
+  demandChip: {
+    backgroundColor: "#EEF2FF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  demandChipText: { fontSize: 12, color: ACCENT },
+
+  // ── Loading / error ──
+  loadText: { fontSize: 13, color: MUTED, marginTop: 10 },
+  errorText: { fontSize: 13, color: MUTED, textAlign: "center", paddingHorizontal: 32 },
+  retryBtn: { marginTop: 4, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: TEXT, borderRadius: 20 },
+  retryText: { color: WHITE, fontSize: 13, fontWeight: "600" },
 });
