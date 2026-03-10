@@ -11,7 +11,11 @@ from routes.classify import classify_bp
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "http://10.0.8.90:3000"])
+CORS(app, origins=[
+    "http://localhost:3000",
+    "http://10.0.8.90:3000",
+    "https://reco-web-wheat.vercel.app"
+])
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(sales_bp)
