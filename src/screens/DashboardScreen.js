@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useContext } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
@@ -10,8 +10,9 @@ import {
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Svg, { Path } from "react-native-svg";
-import AppText from "../components/AppText";
 import api from "../api/api";
+import { CartContext } from "../context/CartContext";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const BG = "#F5F1E8";
@@ -157,6 +158,9 @@ export default function DashboardScreen() {
   const [shopName, setShopName] = useState("");
   const [shopLocation, setShopLocation] = useState("");
   const [daySummary, setDaySummary] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const { selectedDate, setSelectedDate } = useContext(CartContext);
 
   // Use the analytics summary for revenue (same source as Analytics screen)
   const totalRevenue = daySummary?.total_sales ?? sales.reduce((sum, s) => sum + Number(s.amount || 0), 0);
@@ -222,9 +226,35 @@ export default function DashboardScreen() {
             <AppText font="billbold" style={s.saleBanner}>TODAY'S SALE</AppText>
             <DottedLine />
 
-            <AppText font="billsemi" style={s.date}>
-              DATE: {todayDate}
-            </AppText>
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(true)}
+              style={s.dateRow}
+            >
+              <AppText font="billsemi" style={s.date}>
+                DATE: {selectedDate ? new Date(selectedDate).toLocaleDateString("en-GB") : todayDate}
+              </AppText>
+              <AppText font="billsemi" style={[s.date, { marginLeft: 4, color: ACCENT }]}>
+                {selectedDate ? "(Historical)" : "(Today) ✎"}
+              </AppText>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate ? new Date(selectedDate) : new Date()}
+                mode="date"
+                display="default"
+                maximumDate={new Date()}
+                onChange={(event, date) => {
+                  setShowDatePicker(false);
+                  if (date) {
+                    const formatted = date.toISOString().split("T")[0];
+                    // If it's today, we might want to keep it null to represent "Live"
+                    const isToday = formatted === new Date().toISOString().split("T")[0];
+                    setSelectedDate(isToday ? null : formatted);
+                  }
+                }}
+              />
+            )}
 
             {/* Table header */}
             <View style={s.row}>
@@ -406,12 +436,16 @@ const s = StyleSheet.create({
     borderRadius: 1,
   },
 
-  date: {
-    fontSize: 11,
-    textAlign: "right",
-    color: "#333",
+  dateRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     marginTop: 6,
     marginBottom: 6,
+  },
+  date: {
+    fontSize: 11,
+    color: "#333",
   },
 
   // Table
