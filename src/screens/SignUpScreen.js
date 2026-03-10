@@ -10,8 +10,7 @@ import {
   Alert,
   ScrollView
 } from "react-native";
-import axios from "axios";
-import api from "../api";
+import api from "../api/api";
 import { LinearGradient } from "expo-linear-gradient";
 import AppText from "../components/AppText";
 

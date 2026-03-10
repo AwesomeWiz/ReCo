@@ -1,13 +1,22 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import AppText from "../components/AppText";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SplashScreen({ navigation }) {
 
   useEffect(() => {
-    setTimeout(() => {
-      navigation.replace("SignUp");
-    }, 2000);
+    const checkLogin = async () => {
+      const token = await AsyncStorage.getItem("mfr_token");
+      setTimeout(() => {
+        if (token) {
+          navigation.replace("Main"); // Or "Dashboard" depending on your navigator
+        } else {
+          navigation.replace("SignUp");
+        }
+      }, 2000);
+    };
+    checkLogin();
   }, []);
 
   return (

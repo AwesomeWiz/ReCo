@@ -43,16 +43,20 @@ CLASS_NAMES_PATH = os.path.join(_BACKEND, "class_names.json") # Fallback or slug
 _interpreter = None
 _label_mapping = {}
 _class_names = []
+_load_error = "Not loaded yet"
 
 def _load_model():
-    global _interpreter, _label_mapping, _class_names
+    global _interpreter, _label_mapping, _class_names, _load_error
+    _load_error = None
 
     if not os.path.exists(MODEL_PATH):
-        print(f"[classify] WARNING: Model not found at {MODEL_PATH}")
+        _load_error = f"Model file not found at {MODEL_PATH}"
+        print(f"[classify] WARNING: {_load_error}")
         return
 
     if tflite is None:
-        print("[classify] WARNING: No TFLite runtime available.")
+        _load_error = "No TFLite runtime detected in environment"
+        print(f"[classify] WARNING: {_load_error}")
         return
 
     try:
@@ -60,7 +64,8 @@ def _load_model():
         _interpreter.allocate_tensors()
         print(f"[classify] Model loaded from {MODEL_PATH} via {_tflite_source}")
     except Exception as e:
-        print(f"[classify] ERROR loading model: {e}")
+        _load_error = f"Interpreter error: {str(e)}"
+        print(f"[classify] ERROR loading model: {_load_error}")
         _interpreter = None
 
     if os.path.exists(LABEL_MAPPING_PATH):
@@ -86,7 +91,10 @@ def classify_product(user_id):
     Returns inventory details if product is found in shop's stock.
     """
     if _interpreter is None:
-        return jsonify({"error": "Model not loaded"}), 503
+        return jsonify({
+            "error": "Model not loaded",
+            "details": _load_error
+        }), 503
 
     data = request.get_json(silent=True)
     if not data or "image" not in data:

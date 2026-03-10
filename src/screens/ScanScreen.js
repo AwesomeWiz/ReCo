@@ -98,13 +98,24 @@ export default function ScanScreen({ navigation, route }) {
       const conf = res.data.confidence || 0;
       console.log(`[ScanScreen] Predicted: ${res.data.productName} (${Math.round(conf * 100)}%) | InInv: ${res.data.inInventory}`);
 
-      if (conf >= 0.25) {
+      if (conf >= 0.20) {
         setIsLocked(true);
         isLockedRef.current = true;
       }
     } catch (e) {
-      // Detailed logging for debugging
-      console.log("Scan attempt skipped:", e?.message || "Unknown error", e);
+      console.log("Scan attempt failed:", e?.message || "Unknown error", e);
+      // More informative alert for APK users
+      if (e.response) {
+        // Backend returned an error (e.g., 503, 500)
+        const details = e.response.data?.details || e.response.data?.error || "Check server logs";
+        Alert.alert("Server Error", `Scanning service unavailable.\n\nStatus: ${e.response.status}\nDetails: ${details}`);
+      } else if (e.request) {
+        // No response received (Network error)
+        Alert.alert("Connection Error", "Could not reach the server. Please check your internet connection and keep the phone steady.");
+      } else {
+        // Something else went wrong
+        Alert.alert("Scan Error", "An unexpected error occurred during scanning. Please restart the scanner.");
+      }
     } finally {
       isAnalyzingRef.current = false;
       setIsAnalyzing(false);

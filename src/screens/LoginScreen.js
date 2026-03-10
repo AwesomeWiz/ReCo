@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {
   View, StyleSheet, TextInput, TouchableOpacity, Image, Alert
 } from "react-native";
-import api from "../api"; // ← use the shared api instance, not raw axios
+import api from "../api/api";
 import AppText from "../components/AppText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 

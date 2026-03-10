@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AppText from "../components/AppText";
 import api from "../api/api";
 import { CartContext } from "../context/CartContext";
+import { Modal, KeyboardAvoidingView, TextInput, Platform, Alert as RNAlert } from "react-native";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -54,6 +55,11 @@ export default function ProfileScreen({ navigation }) {
   const [phone, setPhone] = useState("");
   const [totalItems, setTotalItems] = useState(null);
   const [totalSales, setTotalSales] = useState(null);
+  const [upiId, setUpiId] = useState("");
+  const [showUpiModal, setShowUpiModal] = useState(false);
+  const [tempUpi, setTempUpi] = useState("");
+
+  const { clearCart } = useContext(CartContext);
 
   useFocusEffect(
     useCallback(() => {
@@ -105,7 +111,7 @@ export default function ProfileScreen({ navigation }) {
         style: "destructive",
         onPress: async () => {
           await AsyncStorage.multiRemove([
-            "token",
+            "mfr_token",
             "store_name",
             "state",
             "district",

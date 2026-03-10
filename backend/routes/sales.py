@@ -496,7 +496,9 @@ def _fill_date_gaps(dates, values):
         return pd.Series(dtype=float)
     df = pd.DataFrame({"date": pd.to_datetime(dates), "val": values})
     df = df.groupby("date")["val"].sum().sort_index()
-    full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq="D")
+    # Extend to today so ARIMA sees recent zero-sales days
+    end_date = max(df.index.max(), pd.Timestamp.today().normalize())
+    full_idx = pd.date_range(start=df.index.min(), end=end_date, freq="D")
     return df.reindex(full_idx, fill_value=0.0)
 
 
@@ -795,7 +797,7 @@ def demand_forecast(user_id):
             result.append({
                 "product_name": pname,
                 "forecast": [
-                    {"date": d, "predicted_qty": round(v, 1)}
+                    {"date": d, "predicted_qty": int(round(v))}
                     for d, v in zip(future_dates, forecast)
                 ],
                 "total_predicted_7d": round(sum(forecast), 1),
