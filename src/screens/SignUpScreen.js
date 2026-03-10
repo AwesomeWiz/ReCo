@@ -11,67 +11,11 @@ import {
   ScrollView
 } from "react-native";
 import axios from "axios";
+import api from "../api";
 import { LinearGradient } from "expo-linear-gradient";
 import AppText from "../components/AppText";
 
 const COUNTRIES = ["India", "UAE"];
-
-const STATES = [
-  "Andhra Pradesh",
-  "Karnataka",
-  "Kerala",
-  "Puducherry",
-  "Tamil Nadu",
-  "Telangana",
-];
-
-const DISTRICTS = {
-  "Andhra Pradesh": [
-    "Anakapalli", "Anantapur", "Bapatla", "Chittoor", "East Godavari",
-    "Eluru", "Guntur", "Kadapa", "Kakinada", "Konaseema",
-    "Krishna", "Kurnool", "Nandyal", "NTR", "Nellore",
-    "Palnadu", "Parvathipuram Manyam", "Prakasam", "Srikakulam",
-    "Sri Sathya Sai", "Tirupati", "Visakhapatnam", "Vizianagaram",
-    "West Godavari", "YSR Kadapa",
-  ],
-  "Karnataka": [
-    "Bagalkot", "Ballari", "Belagavi", "Bengaluru Rural", "Bengaluru Urban",
-    "Bidar", "Chamarajanagar", "Chikballapur", "Chikkamagaluru", "Chitradurga",
-    "Dakshina Kannada", "Davanagere", "Dharwad", "Gadag", "Hassan",
-    "Haveri", "Kalaburagi", "Kodagu", "Kolar", "Koppal",
-    "Mandya", "Mysuru", "Raichur", "Ramanagara", "Shivamogga",
-    "Tumakuru", "Udupi", "Uttara Kannada", "Vijayapura", "Yadgir",
-  ],
-  "Kerala": [
-    "Alappuzha", "Ernakulam", "Idukki", "Kannur", "Kasaragod",
-    "Kollam", "Kottayam", "Kozhikode", "Malappuram", "Palakkad",
-    "Pathanamthitta", "Thiruvananthapuram", "Thrissur", "Wayanad",
-  ],
-  "Puducherry": [
-    "Karaikal", "Mahe", "Puducherry", "Yanam",
-  ],
-  "Tamil Nadu": [
-    "Ariyalur", "Chengalpattu", "Chennai", "Coimbatore", "Cuddalore",
-    "Dharmapuri", "Dindigul", "Erode", "Kallakurichi", "Kancheepuram",
-    "Kanyakumari", "Karur", "Krishnagiri", "Madurai", "Mayiladuthurai",
-    "Nagapattinam", "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai",
-    "Ramanathapuram", "Ranipet", "Salem", "Sivaganga", "Tenkasi",
-    "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", "Tirunelveli",
-    "Tirupathur", "Tiruppur", "Tiruvallur", "Tiruvannamalai", "Tiruvarur",
-    "Vellore", "Viluppuram", "Virudhunagar",
-  ],
-  "Telangana": [
-    "Adilabad", "Bhadradri Kothagudem", "Hanumakonda", "Hyderabad", "Jagtial",
-    "Jangaon", "Jayashankar Bhupalpally", "Jogulamba Gadwal", "Kamareddy",
-    "Karimnagar", "Khammam", "Komaram Bheem", "Mahabubabad", "Mahabubnagar",
-    "Mancherial", "Medak", "Medchal-Malkajgiri", "Mulugu", "Nagarkurnool",
-    "Nalgonda", "Narayanpet", "Nirmal", "Nizamabad", "Peddapalli",
-    "Rajanna Sircilla", "Rangareddy", "Sangareddy", "Siddipet",
-    "Suryapet", "Vikarabad", "Wanaparthy", "Warangal", "Yadadri Bhuvanagiri",
-  ],
-};
-
-
 
 const STATES = [
   "Andaman and Nicobar Islands",
@@ -186,13 +130,13 @@ export default function SignUpScreen({ navigation }) {
         return;
       }
 
-      const res = await axios.post("http://10.0.8.90:5000/signup", {
-        store: store,
-        phone: phone,
-        password: password,
+      const res = await api.post("/signup", {  // ← was axios.post("http://10.0.8.90:5000/signup", {
+        store,
+        phone,
+        password,
         country: "India",
-        state: state,
-        district: district,
+        state,
+        district,
       });
 
       Alert.alert("Success", "Account created successfully", [

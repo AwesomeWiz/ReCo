@@ -1,46 +1,30 @@
 import React, { useState } from "react";
 import {
-  View,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  Alert
+  View, StyleSheet, TextInput, TouchableOpacity, Image, Alert
 } from "react-native";
-import axios from "axios";
+import api from "../api"; // ← use the shared api instance, not raw axios
 import AppText from "../components/AppText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function LoginScreen({ navigation }) {
-
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
-
   const handleLogin = async () => {
     try {
-
-      const res = await axios.post("http://10.0.8.90:5000/login", {
-        phone,
-        password
-      });
+      const res = await api.post("/login", { phone, password }); // ← relative path
 
       console.log("Login response:", res.data);
 
-      await AsyncStorage.setItem("token", res.data.token);
+      await AsyncStorage.setItem("mfr_token", res.data.token);  // ← was "token"
       await AsyncStorage.setItem("store_name", res.data.store_name || "");
       await AsyncStorage.setItem("state", res.data.state || "");
       await AsyncStorage.setItem("country", res.data.country || "");
       await AsyncStorage.setItem("district", res.data.district || "");
 
-      const saved = await AsyncStorage.getItem("token");
-      console.log("Saved token:", saved);
-
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Main" }],
-      });
+      navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } catch (err) {
+      console.log(err.response?.data || err.message);
       Alert.alert("Error", "Invalid credentials");
     }
   };

@@ -6,10 +6,11 @@ _DB_FIXED = False
 def get_connection():
     global _DB_FIXED
     conn = pymysql.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASS"),
-        database=os.getenv("DB_NAME", "reco"),
+        host=os.getenv("MYSQLHOST", "localhost"),
+        port=int(os.getenv("MYSQLPORT", 3306)),
+        user=os.getenv("MYSQLUSER", "root"),
+        password=os.getenv("MYSQLPASSWORD", ""),
+        database=os.getenv("MYSQLDATABASE", "reco"),
         cursorclass=pymysql.cursors.DictCursor,
         ssl_disabled=True,
     )
@@ -35,6 +36,5 @@ def get_connection():
                 _DB_FIXED = True
         except Exception as e:
             print(f"Auto-fix error: {e}")
-    # ------------------------------------
     
     return conn
