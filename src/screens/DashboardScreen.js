@@ -190,12 +190,17 @@ export default function DashboardScreen() {
     useCallback(() => {
       fetchTodaySales();
       (async () => {
-        const name = await AsyncStorage.getItem("store_name");
-        const state = await AsyncStorage.getItem("state");
-        const country = await AsyncStorage.getItem("country");
-        setShopName((name || "My Store").toUpperCase());
-        const parts = [state, country].filter(Boolean);
-        setShopLocation(parts.join(", ").toUpperCase());
+        try {
+          const name = await AsyncStorage.getItem("store_name");
+          const state = await AsyncStorage.getItem("state");
+          const country = await AsyncStorage.getItem("country");
+          setShopName((name || "My Store").toUpperCase());
+          const parts = [state, country].filter(Boolean);
+          setShopLocation(parts.join(", ").toUpperCase());
+        } catch (error) {
+          console.error("Dashboard failed to load shop metadata:", error);
+          setShopName("MY STORE");
+        }
       })();
     }, [])
   );

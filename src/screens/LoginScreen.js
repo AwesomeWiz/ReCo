@@ -12,20 +12,26 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     try {
-      const res = await api.post("/login", { phone, password }); // ← relative path
+      const res = await api.post("/login", { phone, password });
 
       console.log("Login response:", res.data);
 
-      await AsyncStorage.setItem("mfr_token", res.data.token);  // ← was "token"
-      await AsyncStorage.setItem("store_name", res.data.store_name || "");
-      await AsyncStorage.setItem("state", res.data.state || "");
-      await AsyncStorage.setItem("country", res.data.country || "");
-      await AsyncStorage.setItem("district", res.data.district || "");
+      if (!res.data || !res.data.token) {
+        throw new Error("Invalid response from server: Missing token");
+      }
+
+      // Explicitly convert all stored values to strings to prevent native bridge crashes on Android
+      await AsyncStorage.setItem("mfr_token", String(res.data.token));
+      await AsyncStorage.setItem("store_name", String(res.data.store_name || "My Store"));
+      await AsyncStorage.setItem("state", String(res.data.state || ""));
+      await AsyncStorage.setItem("country", String(res.data.country || ""));
+      await AsyncStorage.setItem("district", String(res.data.district || ""));
 
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } catch (err) {
-      console.log(err.response?.data || err.message);
-      Alert.alert("Error", "Invalid credentials");
+      const errorMsg = err.response?.data?.message || err.message || "An unknown error occurred";
+      console.error("Login failed:", errorMsg);
+      Alert.alert("Login Error", errorMsg);
     }
   };
 

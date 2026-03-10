@@ -7,14 +7,21 @@ export default function SplashScreen({ navigation }) {
 
   useEffect(() => {
     const checkLogin = async () => {
-      const token = await AsyncStorage.getItem("mfr_token");
-      setTimeout(() => {
-        if (token) {
-          navigation.replace("Main"); // Or "Dashboard" depending on your navigator
-        } else {
-          navigation.replace("SignUp");
-        }
-      }, 2000);
+      try {
+        const token = await AsyncStorage.getItem("mfr_token");
+        // Brief delay for splash branding
+        setTimeout(() => {
+          if (token) {
+            navigation.replace("Main");
+          } else {
+            navigation.replace("SignUp");
+          }
+        }, 1500);
+      } catch (error) {
+        console.error("Splash Screen checkLogin error:", error);
+        // Fallback to SignUp if something goes wrong
+        navigation.replace("SignUp");
+      }
     };
     checkLogin();
   }, []);
