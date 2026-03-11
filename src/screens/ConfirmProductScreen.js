@@ -29,6 +29,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
   const [quantity, setQuantity] = useState(1);
   const [upiId, setUpiId] = useState("");
   const [storeName, setStoreName] = useState("My Store");
+  const [finalTotal, setFinalTotal] = useState(0);
 
   const {
     transactionId,
@@ -160,6 +161,8 @@ export default function ConfirmProductScreen({ route, navigation }) {
       if (isCartFlow) {
         // Complete the transaction seamlessly in 1-click
         await api.post("/transactions/complete", { transaction_id: activeId });
+        // Save total BEFORE clearing cart so it's available in modal
+        setFinalTotal(cartModeTotal);
         setTransactionId(null);
         setCartItems([]);
         setShowSuccess(true); // Trigger the beautiful success modal
@@ -422,13 +425,13 @@ export default function ConfirmProductScreen({ route, navigation }) {
                 <AppText style={styles.qrTitle}>Pay via UPI</AppText>
                 <View style={styles.qrWrapper}>
                   <QRCode
-                    value={`upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${cartModeTotal.toFixed(2)}&cu=INR`}
+                    value={`upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${finalTotal.toFixed(2)}&cu=INR`}
                     size={220}
                     color="#2254C5"
                     backgroundColor="white"
                   />
                 </View>
-                <AppText style={styles.qrSubtitle}>Total: ₹{cartModeTotal.toFixed(2)}</AppText>
+                <AppText style={styles.qrSubtitle}>Total: ₹{finalTotal.toFixed(2)}</AppText>
                 <AppText style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{upiId}</AppText>
               </View>
             ) : null}

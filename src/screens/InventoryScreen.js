@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Modal,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import AppText from "../components/AppText";

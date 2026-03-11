@@ -141,7 +141,7 @@ export default function AnalyticsScreen() {
           <View style={s.heroCard}>
             <AppText style={s.heroLabel}>Total Revenue</AppText>
             <AppText font="bold" style={s.heroValue}>
-              ₹{Number(summary.total_sales).toLocaleString("en-IN")}
+              ₹{Math.round(Number(summary.total_sales)).toLocaleString("en-IN")}
             </AppText>
 
             {/* ── 3 sub-stats ── */}
@@ -152,7 +152,7 @@ export default function AnalyticsScreen() {
               </View>
               <View style={s.subStatDivider} />
               <View style={s.subStat}>
-                <AppText font="bold" style={s.subStatValue}>{summary.total_items ?? 0}</AppText>
+                <AppText font="bold" style={s.subStatValue}>{Math.round(summary.total_items ?? 0)}</AppText>
                 <AppText style={s.subStatLabel}>Items sold</AppText>
               </View>
               <View style={s.subStatDivider} />
@@ -230,8 +230,8 @@ export default function AnalyticsScreen() {
                   <View style={{ flex: 1 }}>
                     <AppText font="bold" style={s.riskName} numberOfLines={1}>{item.product_name}</AppText>
                     <AppText style={s.riskMeta}>
-                      Stock {item.stock} · ~{item.predicted_demand_7d} needed
-                      {item.days_until_stockout != null ? ` · ${item.days_until_stockout}d left` : ""}
+                      Stock {Math.round(item.stock)} · ~{Math.round(item.predicted_demand_7d)} needed
+                      {item.days_until_stockout != null ? ` · ${Math.round(item.days_until_stockout)}d left` : ""}
                     </AppText>
                   </View>
                   <AppText style={[s.riskLabel, { color: cfg.color }]}>{cfg.label}</AppText>
@@ -259,7 +259,7 @@ export default function AnalyticsScreen() {
                 <AppText style={s.demandName} numberOfLines={1}>{prod.product_name}</AppText>
                 <View style={s.demandChip}>
                   <AppText font="bold" style={s.demandChipText}>
-                    {prod.total_predicted_7d} units
+                    {Math.round(prod.total_predicted_7d)} units
                   </AppText>
                 </View>
               </View>
