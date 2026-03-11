@@ -186,12 +186,12 @@ export default function AnalyticsScreen() {
         )}
 
         {/* ── Revenue forecast ───────────────────────────────────────────────── */}
-        {chartData && (
-          <View style={s.section}>
-            <View style={s.sectionHead}>
-              <AppText font="bold" style={s.sectionTitle}>Revenue Forecast</AppText>
-              <AppText style={s.sectionSub}>Next 7 days · ARIMA</AppText>
-            </View>
+        <View style={s.section}>
+          <View style={s.sectionHead}>
+            <AppText font="bold" style={s.sectionTitle}>Revenue Forecast</AppText>
+            <AppText style={s.sectionSub}>Next 7 days · ARIMA</AppText>
+          </View>
+          {chartData ? (
             <LineChart
               data={chartData}
               width={SCREEN_W - 48}
@@ -211,8 +211,16 @@ export default function AnalyticsScreen() {
               withOuterLines={false}
               withShadow={false}
             />
-          </View>
-        )}
+          ) : (
+            <View style={s.emptyForecast}>
+              <Ionicons name="bar-chart-outline" size={32} color={MUTED} />
+              <AppText style={s.emptyForecastText}>
+                Not enough sales data yet.{"\n"}Complete a few transactions to see the forecast.
+              </AppText>
+            </View>
+          )}
+        </View>
+
 
         {/* ── Stockout risk ──────────────────────────────────────────────────── */}
         {stockout && stockout.length > 0 && (
@@ -420,4 +428,19 @@ const s = StyleSheet.create({
   errorText: { fontSize: 13, color: MUTED, textAlign: "center", paddingHorizontal: 32 },
   retryBtn: { marginTop: 4, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: TEXT, borderRadius: 20 },
   retryText: { color: WHITE, fontSize: 13, fontWeight: "600" },
+
+  // ── Empty forecast placeholder ──
+  emptyForecast: {
+    alignItems: "center",
+    paddingVertical: 28,
+    gap: 10,
+  },
+  emptyForecastText: {
+    fontSize: 13,
+    color: MUTED,
+    textAlign: "center",
+    lineHeight: 20,
+    marginTop: 8,
+  },
 });
+

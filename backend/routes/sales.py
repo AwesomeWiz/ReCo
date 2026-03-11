@@ -522,53 +522,55 @@ def _fill_date_gaps(dates, values):
 # ─────────────────────────────────────────────
 def _arima_or_fallback(series, steps=7):
     """Returns list of `steps` forecast values.
-    Tries multiple ARIMA orders; falls back to moving average."""
+    Trains ARIMA only on non-zero sales days; falls back to weighted moving average.
+    This prevents zero-padded days from dragging the forecast to zero."""
     arr = np.asarray(series, dtype=float)
 
-    # ── Compute a stable baseline from recent NON-ZERO values ──
-    # The series is padded with zeros up to today, so the tail may be all zeros.
-    # Using the last non-zero values gives a meaningful anchor.
+    # ── Only keep the non-zero sales days for modelling ──────────────────────
+    # Zero-padding (days with no sales) should not inform the forecast level.
     nonzero = arr[arr > 0]
-    if len(nonzero) > 0:
-        recent_nz = nonzero[-14:] if len(nonzero) >= 14 else nonzero
-        weights = np.arange(1, len(recent_nz) + 1, dtype=float)
-        baseline = float(np.average(recent_nz, weights=weights))
-    else:
-        baseline = 0.0
 
-    if len(arr) >= 3:
-        # Try ARIMA from simplest (no oscillation) to more complex.
-        # (0,1,0) = random walk → flat forecast, no sine
-        # (0,1,1) = exponential smoothing → smooth trend
-        for order in [(0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 1, 0), (2, 1, 0)]:
+    if len(nonzero) == 0:
+        return [0.0] * steps          # Truly no sales history → nothing to forecast
+
+    # Weighted baseline: more weight to recent values
+    recent_nz = nonzero[-14:] if len(nonzero) >= 14 else nonzero
+    weights = np.arange(1, len(recent_nz) + 1, dtype=float)
+    baseline = float(np.average(recent_nz, weights=weights))
+
+    # ── Try ARIMA on non-zero days only ──────────────────────────────────────
+    # Using the actual sales days avoids the series being dominated by zeros.
+    if len(nonzero) >= 3:
+        for order in [(0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 1, 0)]:
             try:
-                model = ARIMA(arr, order=order)
+                model = ARIMA(nonzero, order=order)
                 fit = model.fit()
-                forecast = fit.forecast(steps=steps)
-                values = [float(v) for v in forecast]
+                fc = fit.forecast(steps=steps)
+                values = [float(v) for v in fc]
 
-                # Reject runaway forecasts: any value > 20x baseline is suspicious
-                if baseline > 0 and max(values) > baseline * 20:
+                # Safety: reject runaway (>50× baseline) or all-zero outputs
+                all_zero = all(v <= 0 for v in values)
+                runaway  = baseline > 0 and max(values) > baseline * 50
+                if all_zero or runaway:
                     continue
 
                 return [max(0.0, round(v, 2)) for v in values]
             except Exception:
                 continue
 
-    # Fallback: use last non-zero window so recent zero-padding doesn't wipe the forecast
-    if len(nonzero) == 0:
-        return [0.0] * steps
+    # ── Fallback: weighted moving average with gentle trend ──────────────────
     if len(nonzero) == 1:
-        return [round(max(0.0, float(nonzero[0])), 2)] * steps
+        return [round(baseline, 2)] * steps
 
-    window = nonzero[-3:] if len(nonzero) >= 3 else nonzero
+    window = nonzero[-5:] if len(nonzero) >= 5 else nonzero
+    # Trend from last two points, capped at ±20% of baseline per day
     diffs = np.diff(window.astype(float))
     raw_trend = float(np.mean(diffs))
-    # Cap daily trend to ±15% of baseline to avoid runaway slope
-    max_step = baseline * 0.15 if baseline > 0 else 0.0
-    trend = max(-max_step, min(raw_trend, max_step))
+    cap = baseline * 0.20 if baseline > 0 else 0.0
+    trend = max(-cap, min(raw_trend, cap))
     base = float(window[-1])
     return [round(max(0.0, base + trend * (i + 1)), 2) for i in range(steps)]
+
 
 
 

@@ -192,7 +192,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingTop: 8 }}>
 
         {/* ── Header ─────────────────────────────────── */}
         <View style={styles.header}>
@@ -312,7 +312,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
         {/* ── Global Cart (single-product mode) ─────── */}
         {!isCartFlow && cartItems.length > 0 && (
-          <View style={[styles.card, { marginTop: 0 }]}>
+          <View style={[styles.card, { marginTop: 16 }]}>
             <AppText font="bold" style={styles.cardHeading}>Cart</AppText>
 
             {cartItems.map((item, idx) => (
@@ -379,7 +379,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
       {/* ── Continue Scan ── */}
       {!isCartFlow && (
         <TouchableOpacity style={styles.continueBtn} onPress={handleContinueScan}>
-          <AppText style={styles.continueBtnText}>+ Continue Scanning</AppText>
+          <AppText font="semibold" style={styles.continueBtnText}>+ Continue Scanning</AppText>
         </TouchableOpacity>
       )}
 
@@ -559,8 +559,17 @@ const styles = StyleSheet.create({
   confirmBtnOff: { backgroundColor: "#C0C8D8", shadowOpacity: 0 },
   confirmText: { color: "#FFF", fontSize: 15 },
 
-  continueBtn: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 20, marginBottom: 4 },
-  continueBtnText: { color: "#2254C5", fontSize: 14, fontWeight: "600" },
+  continueBtn: {
+    alignSelf: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    marginBottom: 6,
+    borderRadius: 25,
+    borderWidth: 1.5,
+    borderColor: "#2254C5",
+    backgroundColor: "#EEF2FF",
+  },
+  continueBtnText: { color: "#2254C5", fontSize: 14, fontWeight: "700" },
 
   // Loading
   loadingOverlay: {
