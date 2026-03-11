@@ -4,17 +4,13 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   StyleSheet,
   SafeAreaView,
   RefreshControl,
 } from "react-native";
-import { LineChart } from "react-native-chart-kit";
 import { Ionicons } from "@expo/vector-icons";
 import AppText from "../components/AppText";
 import api from "../api/api";
-
-const { width: SCREEN_W } = Dimensions.get("window");
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -100,16 +96,6 @@ export default function AnalyticsScreen() {
     );
   }
 
-  const forecastValues = forecast?.length > 0
-    ? forecast.map(d => Math.max(0, d.predicted_sales))
-    : [];
-  const hasNonZeroForecast = forecastValues.some(v => v > 0);
-  const chartData = hasNonZeroForecast ? {
-    labels: forecast.map(d => d.date.slice(5)),
-    datasets: [{ data: forecastValues }],
-  } : null;
-
-
   const activeDemand = (demand || []).filter(p => p.total_predicted_7d > 0);
   const avgPerSale = summary?.total_transactions > 0
     ? Math.round(summary.total_sales / summary.total_transactions)
@@ -185,41 +171,45 @@ export default function AnalyticsScreen() {
           </View>
         )}
 
-        {/* ── Revenue forecast ───────────────────────────────────────────────── */}
-        <View style={s.section}>
-          <View style={s.sectionHead}>
-            <AppText font="bold" style={s.sectionTitle}>Revenue Forecast</AppText>
-            <AppText style={s.sectionSub}>Next 7 days · ARIMA</AppText>
-          </View>
-          {chartData ? (
-            <LineChart
-              data={chartData}
-              width={SCREEN_W - 48}
-              height={160}
-              chartConfig={{
-                backgroundGradientFrom: WHITE,
-                backgroundGradientTo: WHITE,
-                decimalPlaces: 0,
-                color: (o = 1) => `rgba(58,111,247,${o})`,
-                labelColor: (o = 1) => `rgba(136,136,136,${o})`,
-                propsForDots: { r: "3", strokeWidth: "2", stroke: ACCENT },
-                propsForBackgroundLines: { stroke: BORDER },
-              }}
-              bezier
-              style={{ borderRadius: 12, marginLeft: -10 }}
-              withInnerLines={true}
-              withOuterLines={false}
-              withShadow={false}
-            />
-          ) : (
-            <View style={s.emptyForecast}>
-              <Ionicons name="bar-chart-outline" size={32} color={MUTED} />
-              <AppText style={s.emptyForecastText}>
-                Not enough sales data yet.{"\n"}Complete a few transactions to see the forecast.
-              </AppText>
+        {/* ── Top Selling Products ────────────────────────────────────────────── */}
+        {activeDemand.length > 0 && (
+          <View style={s.section}>
+            <View style={s.sectionHead}>
+              <AppText font="bold" style={s.sectionTitle}>Top Selling Products</AppText>
+              <AppText style={s.sectionSub}>By predicted 7-day demand</AppText>
             </View>
-          )}
-        </View>
+            {(() => {
+              const maxDemand = Math.max(...activeDemand.map(p => p.total_predicted_7d), 1);
+              return activeDemand
+                .sort((a, b) => b.total_predicted_7d - a.total_predicted_7d)
+                .slice(0, 6)
+                .map((prod, i) => {
+                  const pct = Math.round((prod.total_predicted_7d / maxDemand) * 100);
+                  return (
+                    <View key={i} style={s.topProductRow}>
+                      <View style={s.topProductRank}>
+                        <AppText font="bold" style={s.topProductRankText}>#{i + 1}</AppText>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={s.topProductNameRow}>
+                          <AppText font="semibold" style={s.topProductName} numberOfLines={1}>
+                            {prod.product_name}
+                          </AppText>
+                          <AppText font="bold" style={s.topProductUnits}>
+                            {Math.round(prod.total_predicted_7d)} units
+                          </AppText>
+                        </View>
+                        <View style={s.topProductBarBg}>
+                          <View style={[s.topProductBar, { width: `${pct}%` }]} />
+                        </View>
+                      </View>
+                    </View>
+                  );
+                });
+            })()}
+          </View>
+        )}
+
 
 
         {/* ── Stockout risk ──────────────────────────────────────────────────── */}
@@ -429,18 +419,42 @@ const s = StyleSheet.create({
   retryBtn: { marginTop: 4, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: TEXT, borderRadius: 20 },
   retryText: { color: WHITE, fontSize: 13, fontWeight: "600" },
 
-  // ── Empty forecast placeholder ──
-  emptyForecast: {
+  // ── Top Selling Products ──
+  topProductRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 28,
-    gap: 10,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F2F2F2",
   },
-  emptyForecastText: {
-    fontSize: 13,
-    color: MUTED,
-    textAlign: "center",
-    lineHeight: 20,
-    marginTop: 8,
+  topProductRank: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#EEF2FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  topProductRankText: { fontSize: 11, color: ACCENT },
+  topProductNameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+  topProductName: { fontSize: 13, color: TEXT, flex: 1, marginRight: 8 },
+  topProductUnits: { fontSize: 13, color: ACCENT },
+  topProductBarBg: {
+    height: 5,
+    backgroundColor: "#E8EEFF",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  topProductBar: {
+    height: 5,
+    backgroundColor: ACCENT,
+    borderRadius: 3,
   },
 });
+
 

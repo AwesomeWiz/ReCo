@@ -79,6 +79,7 @@ export default function BarcodeScannerScreen({ navigation, route }) {
       if (res.data.found) {
         setTorchOn(false);
         navigation.replace("ConfirmProduct", {
+          fromScreen: "BarcodeScanner",
           prediction: {
             productName: res.data.product.name,
             category: res.data.product.category,

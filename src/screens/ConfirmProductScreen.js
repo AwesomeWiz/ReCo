@@ -40,6 +40,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
   const isCartFlow = route.params?.isCartFlow || false;
   const cartData = routePrediction.cart || [];
+  const fromScreen = route.params?.fromScreen || "Scan"; // "BarcodeScanner" or "Scan"
 
   // Single item logic
   const price = product.price ?? 0;
@@ -181,7 +182,11 @@ export default function ConfirmProductScreen({ route, navigation }) {
   };
 
   const handleContinueScan = () => {
-    navigation.navigate("Scan");
+    if (fromScreen === "BarcodeScanner") {
+      navigation.navigate("BarcodeScanner", { mode: "sales" });
+    } else {
+      navigation.navigate("Scan");
+    }
   };
 
   const cartTotal = cartItems.reduce(
@@ -350,38 +355,40 @@ export default function ConfirmProductScreen({ route, navigation }) {
 
       </ScrollView>
 
-      {/* ── Sticky Action Bar ─────────────────────────── */}
-      <View style={styles.actionBar}>
-        <TouchableOpacity
-          style={styles.cancelBtn}
-          onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
-        >
-          <AppText font="semibold" style={styles.cancelText}>Cancel</AppText>
-        </TouchableOpacity>
+      {/* ── Sticky Bottom (action bar + continue scan) ── */}
+      <View style={styles.stickyBottom}>
+        <View style={styles.actionBar}>
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => navigation.navigate("Main", { screen: "Dashboard" })}
+          >
+            <AppText font="semibold" style={styles.cancelText}>Cancel</AppText>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.confirmBtn,
-            (!isCartFlow && (isOutOfStock || product.inInventory === false)) && styles.confirmBtnOff,
-            loading && { opacity: 0.7 }
-          ]}
-          onPress={handleAddItem}
-          disabled={(!isCartFlow && (isOutOfStock || product.inInventory === false)) || loading}
-        >
-          <AppText font="bold" style={styles.confirmText}>
-            {loading
-              ? (isCartFlow ? "Processing..." : "Adding...")
-              : (isCartFlow ? "Checkout →" : "Add to Cart")}
-          </AppText>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.confirmBtn,
+              (!isCartFlow && (isOutOfStock || product.inInventory === false)) && styles.confirmBtnOff,
+              loading && { opacity: 0.7 }
+            ]}
+            onPress={handleAddItem}
+            disabled={(!isCartFlow && (isOutOfStock || product.inInventory === false)) || loading}
+          >
+            <AppText font="bold" style={styles.confirmText}>
+              {loading
+                ? (isCartFlow ? "Processing..." : "Adding...")
+                : (isCartFlow ? "Checkout →" : "Add to Cart")}
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        {!isCartFlow && (
+          <TouchableOpacity style={styles.continueBtn} onPress={handleContinueScan}>
+            <AppText font="semibold" style={styles.continueBtnText}>+ Continue Scanning</AppText>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* ── Continue Scan ── */}
-      {!isCartFlow && (
-        <TouchableOpacity style={styles.continueBtn} onPress={handleContinueScan}>
-          <AppText font="semibold" style={styles.continueBtnText}>+ Continue Scanning</AppText>
-        </TouchableOpacity>
-      )}
 
       {/* ── Loading Modal ── */}
       <Modal visible={loading} transparent animationType="fade">
@@ -536,14 +543,25 @@ const styles = StyleSheet.create({
     alignItems: "center", marginTop: 10, backgroundColor: "#FFF8F8",
   },
 
-  // Sticky action bar
+  // Sticky bottom wrapper
+  stickyBottom: {
+    backgroundColor: "#FFF",
+    borderTopWidth: 1,
+    borderTopColor: "#EFEFEF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 8,
+    paddingBottom: 12,
+  },
+
+  // Action row inside stickyBottom
   actionBar: {
     flexDirection: "row",
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: "#FFF",
-    borderTopWidth: 1, borderTopColor: "#EFEFEF",
-    shadowColor: "#000", shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05, shadowRadius: 6, elevation: 6,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 0,
   },
   cancelBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 14,
@@ -559,17 +577,19 @@ const styles = StyleSheet.create({
   confirmBtnOff: { backgroundColor: "#C0C8D8", shadowOpacity: 0 },
   confirmText: { color: "#FFF", fontSize: 15 },
 
+  // Continue scan row
   continueBtn: {
     alignSelf: "center",
-    paddingVertical: 12,
+    marginTop: 10,
+    paddingVertical: 10,
     paddingHorizontal: 28,
-    marginBottom: 6,
     borderRadius: 25,
     borderWidth: 1.5,
     borderColor: "#2254C5",
     backgroundColor: "#EEF2FF",
   },
   continueBtnText: { color: "#2254C5", fontSize: 14, fontWeight: "700" },
+
 
   // Loading
   loadingOverlay: {
