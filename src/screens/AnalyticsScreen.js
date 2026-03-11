@@ -100,10 +100,15 @@ export default function AnalyticsScreen() {
     );
   }
 
-  const chartData = forecast?.length > 0 ? {
+  const forecastValues = forecast?.length > 0
+    ? forecast.map(d => Math.max(0, d.predicted_sales))
+    : [];
+  const hasNonZeroForecast = forecastValues.some(v => v > 0);
+  const chartData = hasNonZeroForecast ? {
     labels: forecast.map(d => d.date.slice(5)),
-    datasets: [{ data: forecast.map(d => Math.max(0, d.predicted_sales)) }],
+    datasets: [{ data: forecastValues }],
   } : null;
+
 
   const activeDemand = (demand || []).filter(p => p.total_predicted_7d > 0);
   const avgPerSale = summary?.total_transactions > 0
