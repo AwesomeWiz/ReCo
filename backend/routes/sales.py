@@ -609,20 +609,12 @@ def analytics_summary(user_id):
     cur = conn.cursor()
 
     try:
-<<<<<<< HEAD
         # ── Total sales, transactions & items sold ──────────
         cur.execute(f"""
             SELECT
                 COALESCE(SUM(t.total), 0)    AS total_sales,
                 COUNT(DISTINCT t.id)         AS total_transactions,
                 COALESCE(SUM(s.quantity), 0) AS total_items
-=======
-        # ── Total sales & transactions (No JOIN to avoid inflated sums) ──────────
-        cur.execute(f"""
-            SELECT
-                COALESCE(SUM(total), 0) AS total_sales,
-                COUNT(id)               AS total_transactions
->>>>>>> 8826e5c47276a1eef4e1d657041a478c9e5497a9
             FROM transactions t
             LEFT JOIN sales s ON s.transaction_id = t.id AND s.shop_id = t.shop_id
             WHERE t.shop_id = %s
