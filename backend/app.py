@@ -5,15 +5,23 @@ from dotenv import load_dotenv
 from routes.auth import auth_bp
 from routes.sales import sales_bp
 from routes.inventory import inventory_bp
+from routes.manufacturer import manufacturer_bp
+from routes.classify import classify_bp
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=[
+    "http://localhost:3000",
+    "http://10.0.8.90:3000",
+    "https://reco-web-wheat.vercel.app"
+])
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(sales_bp)
 app.register_blueprint(inventory_bp)
+app.register_blueprint(manufacturer_bp)
+app.register_blueprint(classify_bp)
 
 @app.route("/")
 def home():

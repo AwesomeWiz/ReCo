@@ -1,13 +1,29 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import AppText from "../components/AppText";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SplashScreen({ navigation }) {
 
   useEffect(() => {
-    setTimeout(() => {
-      navigation.replace("SignUp");
-    }, 2000);
+    const checkLogin = async () => {
+      try {
+        const token = await AsyncStorage.getItem("mfr_token");
+        // Brief delay for splash branding
+        setTimeout(() => {
+          if (token) {
+            navigation.replace("Main");
+          } else {
+            navigation.replace("SignUp");
+          }
+        }, 1500);
+      } catch (error) {
+        console.error("Splash Screen checkLogin error:", error);
+        // Fallback to SignUp if something goes wrong
+        navigation.replace("SignUp");
+      }
+    };
+    checkLogin();
   }, []);
 
   return (

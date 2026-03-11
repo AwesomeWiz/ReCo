@@ -1,14 +1,29 @@
-import labelMapping from "../data/labelMapping.json";
+import classNames from "../data/class_names.json";
 
 /**
- * Takes the raw Float32Array output from the TFLite classifier
+ * Softmax: converts raw logits into probabilities that sum to 1.
+ * Uses the max-subtraction trick to avoid overflow.
+ */
+function softmax(arr) {
+    const max = Math.max(...arr);
+    const exps = arr.map((v) => Math.exp(v - max));
+    const sum = exps.reduce((a, b) => a + b, 0);
+    return exps.map((e) => e / sum);
+}
+
+/**
+ * Takes the raw output tensor from the TFLite classifier
  * and returns a structured prediction object.
  *
- * @param {Float32Array | number[]} outputTensor - Raw scores from model output
+ * @param {Float32Array | Uint8Array | number[]} outputTensor
  * @returns {{ productName: string, confidence: number }}
  */
 export function classifyOutput(outputTensor) {
-    const scores = Array.from(outputTensor);
+    const raw = Array.from(outputTensor);
+
+    // Determine if the output is logits (values outside 0-1) or probabilities
+    const needsSoftmax = raw.some((v) => v < 0 || v > 1);
+    const scores = needsSoftmax ? softmax(raw) : raw;
 
     // Find the index with the highest score
     let maxIndex = 0;
@@ -20,13 +35,10 @@ export function classifyOutput(outputTensor) {
         }
     }
 
-    // labelMapping keys are 1-indexed strings ("1" through "59")
-    // Model output index 0 → label key "1", index 1 → label key "2", etc.
-    const labelKey = String(maxIndex + 1);
+    // class_names.json is a 0-indexed array
     const productName =
-        labelMapping.product_names[labelKey] || `Unknown (class ${maxIndex + 1})`;
+        classNames[maxIndex] || `Unknown (class ${maxIndex})`;
 
-    // Confidence: if model outputs raw logits, apply softmax; if already probabilities, use directly
     const confidence = isNaN(maxScore) ? 0 : Math.min(Math.max(maxScore, 0), 1);
 
     return { productName, confidence };

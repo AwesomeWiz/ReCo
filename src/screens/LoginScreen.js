@@ -1,44 +1,37 @@
 import React, { useState } from "react";
 import {
-  View,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  Alert
+  View, StyleSheet, TextInput, TouchableOpacity, Image, Alert
 } from "react-native";
-import axios from "axios";
+import api from "../api/api";
 import AppText from "../components/AppText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function LoginScreen({ navigation }) {
-
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
-
   const handleLogin = async () => {
     try {
-
-    const res = await axios.post("http://10.0.9.142:5000/login", {
-      phone,
-      password
-    });
+      const res = await api.post("/login", { phone, password });
 
       console.log("Login response:", res.data);
 
-      await AsyncStorage.setItem("token", res.data.token);
-      await AsyncStorage.setItem("store_name", res.data.store_name || "");
-      await AsyncStorage.setItem("state", res.data.state || "");
-      await AsyncStorage.setItem("country", res.data.country || "");
+      if (!res.data || !res.data.token) {
+        throw new Error("Invalid response from server: Missing token");
+      }
 
-      const saved = await AsyncStorage.getItem("token");
-      console.log("Saved token:", saved);
+      // Explicitly convert all stored values to strings to prevent native bridge crashes on Android
+      await AsyncStorage.setItem("mfr_token", String(res.data.token));
+      await AsyncStorage.setItem("store_name", String(res.data.store_name || "My Store"));
+      await AsyncStorage.setItem("state", String(res.data.state || ""));
+      await AsyncStorage.setItem("country", String(res.data.country || ""));
+      await AsyncStorage.setItem("district", String(res.data.district || ""));
 
-      navigation.replace("Main");
-
+      navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } catch (err) {
-      Alert.alert("Error", "Invalid credentials");
+      const errorMsg = err.response?.data?.message || err.message || "An unknown error occurred";
+      console.error("Login failed:", errorMsg);
+      Alert.alert("Login Error", errorMsg);
     }
   };
 
@@ -59,6 +52,7 @@ export default function LoginScreen({ navigation }) {
           />
           <TextInput
             placeholder="Phone Number"
+            placeholderTextColor="#999999"
             style={styles.textInput}
             keyboardType="phone-pad"
             value={phone}
@@ -73,6 +67,7 @@ export default function LoginScreen({ navigation }) {
           />
           <TextInput
             placeholder="Password"
+            placeholderTextColor="#999999"
             style={styles.textInput}
             secureTextEntry
             value={password}
@@ -112,7 +107,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
   },
   icon: { width: 20, height: 20, marginRight: 10 },
-  textInput: { flex: 1, fontFamily: "Poppins-Regular" },
+  textInput: { flex: 1, fontFamily: "Poppins-Regular", color: "#1a1a1a" },
   button: {
     backgroundColor: "#2254C5",
     height: 55,

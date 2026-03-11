@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useContext } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
@@ -10,8 +10,9 @@ import {
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Svg, { Path } from "react-native-svg";
-import AppText from "../components/AppText";
 import api from "../api/api";
+import { CartContext } from "../context/CartContext";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const BG = "#F5F1E8";
@@ -156,27 +157,29 @@ export default function DashboardScreen() {
   const [sales, setSales] = useState([]);
   const [shopName, setShopName] = useState("");
   const [shopLocation, setShopLocation] = useState("");
-  const totalRevenue = sales.reduce(
-    (sum, s) => sum + Number(s.amount || 0),
-    0
-  );
+  const [daySummary, setDaySummary] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const totalItems = sales.reduce(
-    (sum, s) => sum + Number(s.qty || 0),
-    0
-  );
+  const { selectedDate, setSelectedDate } = useContext(CartContext);
 
-  const totalTransactions = sales.length;
+  // Use the analytics summary for revenue (same source as Analytics screen)
+  const totalRevenue = daySummary?.total_sales ?? sales.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const totalItems = daySummary?.total_items ?? sales.reduce((sum, s) => sum + Number(s.qty || 0), 0);
+  const totalTransactions = daySummary?.total_transactions ?? sales.length;
+
   const [loading, setLoading] = useState(false);
 
   const fetchTodaySales = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/sales/today");
-      setSales(res.data || []);
+      const [salesRes, summaryRes] = await Promise.allSettled([
+        api.get("/sales/today"),
+        api.get("/analytics/summary?period=daily"),
+      ]);
+      if (salesRes.status === "fulfilled") setSales(salesRes.value.data || []);
+      if (summaryRes.status === "fulfilled") setDaySummary(summaryRes.value.data);
     } catch (err) {
       console.log("Failed to fetch today's sales", err);
-      setSales([]);
     } finally {
       setLoading(false);
     }
@@ -187,12 +190,17 @@ export default function DashboardScreen() {
     useCallback(() => {
       fetchTodaySales();
       (async () => {
-        const name = await AsyncStorage.getItem("store_name");
-        const state = await AsyncStorage.getItem("state");
-        const country = await AsyncStorage.getItem("country");
-        setShopName((name || "My Store").toUpperCase());
-        const parts = [state, country].filter(Boolean);
-        setShopLocation(parts.join(", ").toUpperCase());
+        try {
+          const name = await AsyncStorage.getItem("store_name");
+          const state = await AsyncStorage.getItem("state");
+          const country = await AsyncStorage.getItem("country");
+          setShopName((name || "My Store").toUpperCase());
+          const parts = [state, country].filter(Boolean);
+          setShopLocation(parts.join(", ").toUpperCase());
+        } catch (error) {
+          console.error("Dashboard failed to load shop metadata:", error);
+          setShopName("MY STORE");
+        }
       })();
     }, [])
   );
@@ -223,9 +231,35 @@ export default function DashboardScreen() {
             <AppText font="billbold" style={s.saleBanner}>TODAY'S SALE</AppText>
             <DottedLine />
 
-            <AppText font="billsemi" style={s.date}>
-              DATE: {todayDate}
-            </AppText>
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(true)}
+              style={s.dateRow}
+            >
+              <AppText font="billsemi" style={s.date}>
+                DATE: {selectedDate ? new Date(selectedDate).toLocaleDateString("en-GB") : todayDate}
+              </AppText>
+              <AppText font="billsemi" style={[s.date, { marginLeft: 4, color: ACCENT }]}>
+                {selectedDate ? "(Historical)" : "(Today) ✎"}
+              </AppText>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate ? new Date(selectedDate) : new Date()}
+                mode="date"
+                display="default"
+                maximumDate={new Date()}
+                onChange={(event, date) => {
+                  setShowDatePicker(false);
+                  if (date) {
+                    const formatted = date.toISOString().split("T")[0];
+                    // If it's today, we might want to keep it null to represent "Live"
+                    const isToday = formatted === new Date().toISOString().split("T")[0];
+                    setSelectedDate(isToday ? null : formatted);
+                  }
+                }}
+              />
+            )}
 
             {/* Table header */}
             <View style={s.row}>
@@ -260,11 +294,16 @@ export default function DashboardScreen() {
           <ZigzagEdge flip />
         </View>
 
-        {/* View Full */}
+        {/* View Full / Transactions row */}
         <View style={s.viewFullWrap}>
-          <TouchableOpacity onPress={() => navigation.navigate("SalesHistory")}>
+          <TouchableOpacity onPress={() => navigation.navigate("TodaySales")}>
             <AppText font="satoshi" style={s.viewFull}>
-              View Full {sales.length > 6 && `(${sales.length} total)`}
+              View Full Sales {sales.length > 6 && `(${sales.length} total)`}
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate("SalesHistory")} style={s.txnBtn}>
+            <AppText font="satoshi" style={s.txnBtnText}>
+              Transactions
             </AppText>
           </TouchableOpacity>
         </View>
@@ -402,12 +441,16 @@ const s = StyleSheet.create({
     borderRadius: 1,
   },
 
-  date: {
-    fontSize: 11,
-    textAlign: "right",
-    color: "#333",
+  dateRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     marginTop: 6,
     marginBottom: 6,
+  },
+  date: {
+    fontSize: 11,
+    color: "#333",
   },
 
   // Table
@@ -434,7 +477,9 @@ const s = StyleSheet.create({
   },
 
   viewFullWrap: {
-    alignItems: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: -8,
     marginBottom: 16,
     paddingHorizontal: 14,
@@ -444,6 +489,18 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.3,
+  },
+
+  txnBtn: {
+    backgroundColor: ACCENT,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+  },
+  txnBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   // ── Analytics card ──
