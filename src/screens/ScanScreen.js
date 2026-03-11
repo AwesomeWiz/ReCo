@@ -353,6 +353,7 @@ export default function ScanScreen({ navigation, route }) {
 
   const handleReviewOrder = () => {
     if (scannedItems.length === 0) return;
+    setTorchOn(false); // Turn off flashlight when leaving scan screen
 
     // Convert array format to how ConfirmProduct expects it
     const predictionObj = {

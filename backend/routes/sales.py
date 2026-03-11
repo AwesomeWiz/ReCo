@@ -525,53 +525,51 @@ def _arima_or_fallback(series, steps=7):
     Tries multiple ARIMA orders; falls back to moving average."""
     arr = np.asarray(series, dtype=float)
 
-    # ── Simple sanity baseline: weighted average of recent days ──
-    recent = arr[-14:] if len(arr) >= 14 else arr
-    if len(recent) > 0:
-        weights = np.arange(1, len(recent) + 1, dtype=float)
-        baseline = float(np.average(recent, weights=weights))
+    # ── Compute a stable baseline from recent NON-ZERO values ──
+    # The series is padded with zeros up to today, so the tail may be all zeros.
+    # Using the last non-zero values gives a meaningful anchor.
+    nonzero = arr[arr > 0]
+    if len(nonzero) > 0:
+        recent_nz = nonzero[-14:] if len(nonzero) >= 14 else nonzero
+        weights = np.arange(1, len(recent_nz) + 1, dtype=float)
+        baseline = float(np.average(recent_nz, weights=weights))
     else:
         baseline = 0.0
 
     if len(arr) >= 3:
-        # Try ARIMA orders from simplest to more complex.
-        # Simpler orders (0,1,0 / 0,1,1) avoid the oscillating sine artifact
-        # that (1,1,1) produces when AR and MA parameters cancel each other.
-        for order in [(0, 1, 0), (0, 1, 1), (1, 0, 0), (0, 0, 1), (1, 1, 0), (2, 1, 0)]:
+        # Try ARIMA from simplest (no oscillation) to more complex.
+        # (0,1,0) = random walk → flat forecast, no sine
+        # (0,1,1) = exponential smoothing → smooth trend
+        for order in [(0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 1, 0), (2, 1, 0)]:
             try:
                 model = ARIMA(arr, order=order)
                 fit = model.fit()
                 forecast = fit.forecast(steps=steps)
                 values = [float(v) for v in forecast]
 
-                # Validate: reject oscillating / runaway forecasts.
-                # If any predicted value is more than 10x the recent baseline (or negative large),
-                # or the range of predictions exceeds 5x the historical range, skip this order.
-                hist_range = float(arr.max() - arr.min()) if len(arr) > 1 else float(arr.max())
-                pred_range = max(values) - min(values)
-                if baseline > 0 and max(values) > baseline * 10:
-                    continue
-                if hist_range > 0 and pred_range > hist_range * 5:
+                # Reject runaway forecasts: any value > 20x baseline is suspicious
+                if baseline > 0 and max(values) > baseline * 20:
                     continue
 
                 return [max(0.0, round(v, 2)) for v in values]
             except Exception:
                 continue
 
-    # Fallback: capped linear trend from last 3 data points
-    window = arr[-3:] if len(arr) >= 3 else arr
-    if len(window) == 0:
+    # Fallback: use last non-zero window so recent zero-padding doesn't wipe the forecast
+    if len(nonzero) == 0:
         return [0.0] * steps
-    if len(window) == 1:
-        return [round(max(0.0, float(window[0])), 2)] * steps
+    if len(nonzero) == 1:
+        return [round(max(0.0, float(nonzero[0])), 2)] * steps
 
+    window = nonzero[-3:] if len(nonzero) >= 3 else nonzero
     diffs = np.diff(window.astype(float))
     raw_trend = float(np.mean(diffs))
-    # Cap daily trend to ±20% of baseline to prevent runaway lines
-    max_step = baseline * 0.20 if baseline > 0 else abs(raw_trend)
+    # Cap daily trend to ±15% of baseline to avoid runaway slope
+    max_step = baseline * 0.15 if baseline > 0 else 0.0
     trend = max(-max_step, min(raw_trend, max_step))
     base = float(window[-1])
     return [round(max(0.0, base + trend * (i + 1)), 2) for i in range(steps)]
+
 
 
 
