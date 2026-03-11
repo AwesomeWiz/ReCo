@@ -63,6 +63,9 @@ export default function ScanScreen({ navigation, route }) {
     setBarcodeBuffer([]);
     setSearchQuery("");
     setIsLocked(false);
+    // Reset camera ready so the scan loop doesn't fire during mode transition
+    setCameraReady(false);
+    cameraReadyRef.current = false;
   };
 
   // ─── AI Product Identification via backend /classify ──────────────────────
@@ -408,7 +411,7 @@ export default function ScanScreen({ navigation, route }) {
         <AppText style={{ fontSize: 18 }}>✕</AppText>
       </TouchableOpacity>
 
-      {scanMode === "barcode" && (
+      {(scanMode === "barcode" || scanMode === "product") && (
         <TouchableOpacity
           style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
           onPress={() => setTorchOn(!torchOn)}

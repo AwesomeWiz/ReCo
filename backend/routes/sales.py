@@ -424,19 +424,33 @@ def get_transactions_by_date(user_id):
 @token_required
 def get_today_sales(user_id):
 
+    # Optional ?date=YYYY-MM-DD param for historical dashboard view
+    date_param = request.args.get("date")
+
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            SELECT s.product_name, s.quantity, s.price, s.total
-            FROM sales s
-            JOIN transactions t ON s.transaction_id = t.id
-            WHERE s.shop_id = %s
-              AND DATE(s.created_at) = CURDATE()
-              AND t.status = 'completed'
-            ORDER BY s.created_at DESC
-        """, (user_id,))
+        if date_param:
+            cur.execute("""
+                SELECT s.product_name, s.quantity, s.price, s.total
+                FROM sales s
+                JOIN transactions t ON s.transaction_id = t.id
+                WHERE s.shop_id = %s
+                  AND DATE(s.created_at) = %s
+                  AND t.status = 'completed'
+                ORDER BY s.created_at DESC
+            """, (user_id, date_param))
+        else:
+            cur.execute("""
+                SELECT s.product_name, s.quantity, s.price, s.total
+                FROM sales s
+                JOIN transactions t ON s.transaction_id = t.id
+                WHERE s.shop_id = %s
+                  AND DATE(s.created_at) = CURDATE()
+                  AND t.status = 'completed'
+                ORDER BY s.created_at DESC
+            """, (user_id,))
 
         rows = cur.fetchall()
 
@@ -455,6 +469,7 @@ def get_today_sales(user_id):
     finally:
         cur.close()
         conn.close()
+
 
 
 # ─────────────────────────────────────────────
@@ -509,8 +524,8 @@ def _arima_or_fallback(series, steps=7):
     """Returns list of `steps` forecast values.
     Tries multiple ARIMA orders; falls back to moving average."""
     arr = np.asarray(series, dtype=float)
-    if len(arr) >= 5:
-        for order in [(1, 1, 1), (1, 0, 1), (0, 1, 1), (2, 1, 0)]:
+    if len(arr) >= 3:
+        for order in [(1, 1, 1), (1, 0, 1), (0, 1, 1), (2, 1, 0), (0, 0, 1)]:
             try:
                 model = ARIMA(arr, order=order)
                 fit = model.fit()
@@ -518,13 +533,18 @@ def _arima_or_fallback(series, steps=7):
                 return [max(0.0, round(float(v), 2)) for v in forecast]
             except Exception:
                 continue
-    # Fallback: weighted moving average of last 5 points (or fewer)
-    window = arr[-5:] if len(arr) >= 5 else arr
+    # Fallback: linear trend extrapolation from last up-to-3 points
+    window = arr[-3:] if len(arr) >= 3 else arr
     if len(window) == 0:
         return [0.0] * steps
-    weights = np.arange(1, len(window) + 1, dtype=float)
-    avg = float(np.average(window, weights=weights))
-    return [round(max(0.0, avg), 2)] * steps
+    if len(window) == 1:
+        base = float(window[0])
+        return [round(max(0.0, base), 2)] * steps
+    # Compute average step change over the window
+    diffs = np.diff(window.astype(float))
+    trend = float(np.mean(diffs))
+    base = float(window[-1])
+    return [round(max(0.0, base + trend * (i + 1)), 2) for i in range(steps)]
 
 
 # ─────────────────────────────────────────────

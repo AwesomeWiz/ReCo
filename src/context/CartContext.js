@@ -5,6 +5,7 @@ export const CartContext = createContext();
 export function CartProvider({ children }) {
   const [transactionId, setTransactionId] = useState(null);
   const [cartItems, setCartItems] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(null); // null = today
 
   const clearCart = () => {
     setTransactionId(null);
@@ -18,7 +19,9 @@ export function CartProvider({ children }) {
         setTransactionId,
         cartItems,
         setCartItems,
-        clearCart
+        clearCart,
+        selectedDate,
+        setSelectedDate,
       }}
     >
       {children}

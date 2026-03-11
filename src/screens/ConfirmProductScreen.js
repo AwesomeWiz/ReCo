@@ -184,9 +184,11 @@ export default function ConfirmProductScreen({ route, navigation }) {
         transaction_id: transactionId
       });
 
+      // Save total before clearing cart so UPI modal shows correct amount
+      setFinalTotal(cartTotal);
       setTransactionId(null);
       setCartItems([]);
-      navigation.navigate("Main");
+      setShowSuccess(true);
 
     } catch (err) {
       alert("Checkout failed");
@@ -420,7 +422,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
             <AppText style={styles.modalText}>Your transaction has been successfully recorded.</AppText>
 
             {/* ─── UPI Payment QR Code ─── */}
-            {isCartFlow && upiId ? (
+            {upiId ? (
               <View style={styles.qrContainer}>
                 <AppText style={styles.qrTitle}>Pay via UPI</AppText>
                 <View style={styles.qrWrapper}>

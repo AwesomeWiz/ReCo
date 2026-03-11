@@ -170,11 +170,13 @@ export default function DashboardScreen() {
 
   const [loading, setLoading] = useState(false);
 
-  const fetchTodaySales = async () => {
+  const fetchTodaySales = async (dateStr) => {
     try {
       setLoading(true);
+      const dateParam = dateStr || selectedDate;
+      const salesUrl = dateParam ? `/sales/today?date=${dateParam}` : "/sales/today";
       const [salesRes, summaryRes] = await Promise.allSettled([
-        api.get("/sales/today"),
+        api.get(salesUrl),
         api.get("/analytics/summary?period=daily"),
       ]);
       if (salesRes.status === "fulfilled") setSales(salesRes.value.data || []);
@@ -185,6 +187,11 @@ export default function DashboardScreen() {
       setLoading(false);
     }
   };
+
+  // Re-fetch whenever the selected date changes
+  useEffect(() => {
+    fetchTodaySales(selectedDate);
+  }, [selectedDate]);
 
   // Refresh when screen comes into focus
   useFocusEffect(
