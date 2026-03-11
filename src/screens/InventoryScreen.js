@@ -13,6 +13,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import AppText from "../components/AppText";
 import api from "../api/api";
 import labelData from "../data/labelMapping.json";
+import { Ionicons } from "@expo/vector-icons";
 
 const BG = "#F5F1E8";
 const WHITE = "#FFFFFF";
@@ -374,20 +375,20 @@ export default function InventoryScreen({ navigation, route }) {
                       Stock: {item.stock}
                     </AppText>
 
-                    <View style={s.actionRow}>
-                      <TouchableOpacity
-                        style={s.iconBtn}
-                        onPress={() => startEdit(item)}
-                      >
-                        <AppText style={{ color: ACCENT, fontSize: 16 }}>✏️</AppText>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={s.iconBtn}
-                        onPress={() => handleDeleteProduct(item.id)}
-                      >
-                       <AppText style={{ color: DANGER, fontSize: 16 }}>🗑️</AppText>
-                      </TouchableOpacity>
-                    </View>
+                      <View style={s.actionRow}>
+                        <TouchableOpacity
+                          style={s.iconBtn}
+                          onPress={() => startEdit(item)}
+                        >
+                          <Ionicons name="create-outline" size={22} color={ACCENT} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={s.iconBtn}
+                          onPress={() => handleDeleteProduct(item.id)}
+                        >
+                          <Ionicons name="trash-outline" size={22} color={DANGER} />
+                        </TouchableOpacity>
+                      </View>
                   </View>
                 </View>
               ))

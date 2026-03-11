@@ -524,27 +524,55 @@ def _arima_or_fallback(series, steps=7):
     """Returns list of `steps` forecast values.
     Tries multiple ARIMA orders; falls back to moving average."""
     arr = np.asarray(series, dtype=float)
+
+    # ── Simple sanity baseline: weighted average of recent days ──
+    recent = arr[-14:] if len(arr) >= 14 else arr
+    if len(recent) > 0:
+        weights = np.arange(1, len(recent) + 1, dtype=float)
+        baseline = float(np.average(recent, weights=weights))
+    else:
+        baseline = 0.0
+
     if len(arr) >= 3:
-        for order in [(1, 1, 1), (1, 0, 1), (0, 1, 1), (2, 1, 0), (0, 0, 1)]:
+        # Try ARIMA orders from simplest to more complex.
+        # Simpler orders (0,1,0 / 0,1,1) avoid the oscillating sine artifact
+        # that (1,1,1) produces when AR and MA parameters cancel each other.
+        for order in [(0, 1, 0), (0, 1, 1), (1, 0, 0), (0, 0, 1), (1, 1, 0), (2, 1, 0)]:
             try:
                 model = ARIMA(arr, order=order)
                 fit = model.fit()
                 forecast = fit.forecast(steps=steps)
-                return [max(0.0, round(float(v), 2)) for v in forecast]
+                values = [float(v) for v in forecast]
+
+                # Validate: reject oscillating / runaway forecasts.
+                # If any predicted value is more than 10x the recent baseline (or negative large),
+                # or the range of predictions exceeds 5x the historical range, skip this order.
+                hist_range = float(arr.max() - arr.min()) if len(arr) > 1 else float(arr.max())
+                pred_range = max(values) - min(values)
+                if baseline > 0 and max(values) > baseline * 10:
+                    continue
+                if hist_range > 0 and pred_range > hist_range * 5:
+                    continue
+
+                return [max(0.0, round(v, 2)) for v in values]
             except Exception:
                 continue
-    # Fallback: linear trend extrapolation from last up-to-3 points
+
+    # Fallback: capped linear trend from last 3 data points
     window = arr[-3:] if len(arr) >= 3 else arr
     if len(window) == 0:
         return [0.0] * steps
     if len(window) == 1:
-        base = float(window[0])
-        return [round(max(0.0, base), 2)] * steps
-    # Compute average step change over the window
+        return [round(max(0.0, float(window[0])), 2)] * steps
+
     diffs = np.diff(window.astype(float))
-    trend = float(np.mean(diffs))
+    raw_trend = float(np.mean(diffs))
+    # Cap daily trend to ±20% of baseline to prevent runaway lines
+    max_step = baseline * 0.20 if baseline > 0 else abs(raw_trend)
+    trend = max(-max_step, min(raw_trend, max_step))
     base = float(window[-1])
     return [round(max(0.0, base + trend * (i + 1)), 2) for i in range(steps)]
+
 
 
 # ─────────────────────────────────────────────

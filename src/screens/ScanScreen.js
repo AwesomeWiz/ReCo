@@ -174,6 +174,7 @@ export default function ScanScreen({ navigation, route }) {
   // ─── Confirm prediction → navigate ───────────────────────────────────────
   const handleConfirm = () => {
     if (!prediction) return;
+    setTorchOn(false); // Always turn off torch when leaving scan screen
     navigation.navigate("ConfirmProduct", {
       prediction: prediction,
     });
