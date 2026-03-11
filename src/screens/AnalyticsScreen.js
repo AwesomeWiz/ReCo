@@ -7,7 +7,6 @@ import {
   Dimensions,
   StyleSheet,
   SafeAreaView,
-  SafeAreaView,
   RefreshControl,
 } from "react-native";
 import { LineChart } from "react-native-chart-kit";

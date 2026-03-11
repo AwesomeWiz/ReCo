@@ -11,6 +11,7 @@ import {
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Svg, { Path } from "react-native-svg";
 import api from "../api/api";
+import AppText from "../components/AppText";
 import { CartContext } from "../context/CartContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
