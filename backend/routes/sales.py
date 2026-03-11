@@ -674,13 +674,8 @@ def analytics_summary(user_id):
         """, (user_id, user_id))
         cats = cur.fetchall()
 
-<<<<<<< HEAD
         # ── Stock risk flag: HIGH or MEDIUM risk on any inventory item ──
         # Uses same thresholds as /analytics/stockout-risk:
-=======
-        # ── Stock risk: flag AT RISK only for high or medium risk items ──
-        # Mirrors /analytics/stockout-risk thresholds:
->>>>>>> 8826e5c47276a1eef4e1d657041a478c9e5497a9
         #   high   → stock <= demand_7d * 0.5
         #   medium → stock <  demand_7d
         cur.execute("""
@@ -754,11 +749,7 @@ def demand_forecast(user_id):
     cur = conn.cursor()
 
     try:
-<<<<<<< HEAD
         # Use inventory as the source of products so every item gets a forecast
-=======
-        # Use inventory as the source so every stocked item gets a forecast
->>>>>>> 8826e5c47276a1eef4e1d657041a478c9e5497a9
         # (not just products that have been sold before)
         cur.execute("""
             SELECT product_name
