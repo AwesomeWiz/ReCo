@@ -526,13 +526,11 @@ export default function ScanScreen({ navigation, route }) {
             {/* Header */}
             <View style={styles.cartHeader}>
               <View>
-                <AppText font="semibold" style={styles.cartTitle}>Cart</AppText>
-                <AppText style={styles.cartSubtitle}>
-                  {scannedItems.reduce((s, i) => s + i.qty, 0)} items
-                </AppText>
+                <AppText font="semibold" style={styles.cartTitle}>Scanned Items</AppText>
+                <AppText style={styles.cartSubtitle}>{scannedItems.length} {scannedItems.length === 1 ? 'item' : 'items'} total</AppText>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <AppText style={styles.totalLabel}>TOTAL</AppText>
+                <AppText style={styles.totalLabel}>TOTAL PRICE</AppText>
                 <AppText font="bold" style={styles.totalValue}>
                   ₹{scannedItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0).toFixed(2)}
                 </AppText>
@@ -548,26 +546,21 @@ export default function ScanScreen({ navigation, route }) {
               ) : (
                 scannedItems.map((item, idx) => (
                   <View key={item.barcode + idx} style={styles.cartItem}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <AppText font="semibold" style={styles.itemName} numberOfLines={1}>{item.productName}</AppText>
-                      <AppText style={styles.itemPrice}>₹{item.price.toFixed(2)} / unit</AppText>
+                    <View style={{ flex: 1 }}>
+                      <AppText font="semibold" style={styles.itemName}>{item.productName}</AppText>
+                      <AppText style={styles.itemPrice}>₹{item.price.toFixed(2)}</AppText>
                     </View>
 
                     {/* Quantity controls */}
                     <View style={styles.qtyBox}>
                       <TouchableOpacity onPress={() => handleQuantityChange(item.barcode, -1)} style={styles.qtyBtn}>
-                        <AppText style={styles.qtyBtnText}>−</AppText>
+                        <AppText style={styles.qtyBtnText}>-</AppText>
                       </TouchableOpacity>
                       <AppText font="semibold" style={styles.qtyVal}>{item.qty}</AppText>
                       <TouchableOpacity onPress={() => handleQuantityChange(item.barcode, 1)} style={styles.qtyBtn}>
                         <AppText style={styles.qtyBtnText}>+</AppText>
                       </TouchableOpacity>
                     </View>
-
-                    {/* Line total */}
-                    <AppText font="bold" style={styles.itemLineTotal}>
-                      ₹{(item.price * item.qty).toFixed(2)}
-                    </AppText>
                   </View>
                 ))
               )}
@@ -579,7 +572,7 @@ export default function ScanScreen({ navigation, route }) {
               onPress={handleReviewOrder}
               disabled={scannedItems.length === 0}
             >
-              <AppText font="semibold" style={styles.reviewBtnText}>Checkout →</AppText>
+              <AppText font="semibold" style={styles.reviewBtnText}>Review Order</AppText>
             </TouchableOpacity>
           </View>
         ) : (
@@ -777,49 +770,44 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#1A2B4A",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    marginBottom: 14,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAEAEA",
   },
-  cartTitle: { fontSize: 17, color: "#FFF", letterSpacing: 0.2 },
-  cartSubtitle: { fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 3 },
-  totalLabel: { fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: "700", letterSpacing: 1 },
-  totalValue: { fontSize: 22, color: "#FFF", letterSpacing: -0.5, marginTop: 2 },
+  cartTitle: { fontSize: 18, color: "#111" },
+  cartSubtitle: { fontSize: 12, color: "#666", marginTop: 2 },
+  totalLabel: { fontSize: 10, color: "#666", fontWeight: "700", letterSpacing: 0.5 },
+  totalValue: { fontSize: 18, color: "#2254C5", marginTop: 2 },
 
-  cartList: { flex: 1 },
-  emptyCartText: { textAlign: "center", color: "#AAA", marginTop: 40, fontStyle: "italic" },
+  cartList: { flex: 1, paddingBottom: 10 },
+  emptyCartText: { textAlign: "center", color: "#999", marginTop: 40, fontStyle: "italic" },
 
   cartItem: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#fff",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    padding: 14,
     borderRadius: 14,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
   },
-  itemName: { fontSize: 14, color: "#111", marginBottom: 3 },
-  itemPrice: { fontSize: 11, color: "#999" },
-  itemLineTotal: { fontSize: 14, color: "#1A2B4A", marginLeft: 10, minWidth: 58, textAlign: "right" },
+  itemName: { fontSize: 15, color: "#222", marginBottom: 4 },
+  itemPrice: { fontSize: 13, color: "#666" },
 
   qtyBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F0F3FA",
-    borderRadius: 10,
-    overflow: "hidden",
-    marginLeft: 8,
+    backgroundColor: "#F7F8FA",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
   },
-  qtyBtn: { paddingVertical: 7, paddingHorizontal: 11 },
-  qtyBtnText: { fontSize: 18, color: "#2254C5", fontWeight: "700", lineHeight: 22 },
-  qtyVal: { fontSize: 14, minWidth: 22, textAlign: "center", color: "#111" },
+  qtyBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  qtyBtnText: { fontSize: 18, color: "#555", fontWeight: "600", lineHeight: 20 },
+  qtyVal: { fontSize: 15, paddingHorizontal: 4, minWidth: 20, textAlign: "center" },
 
   reviewBtn: {
     backgroundColor: "#2254C5",
@@ -827,16 +815,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 14,
     marginTop: 10,
-    shadowColor: "#2254C5",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
-  reviewBtnDisabled: { backgroundColor: "#C0C8D8", shadowOpacity: 0 },
-  reviewBtnText: { color: "#fff", fontSize: 16, letterSpacing: 0.3 },
+  reviewBtnDisabled: { backgroundColor: "#B0C4DE" },
+  reviewBtnText: { color: "#fff", fontSize: 16 },
 
   verificationOverlay: {
     position: "absolute",
