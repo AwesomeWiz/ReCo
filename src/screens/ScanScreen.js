@@ -32,7 +32,7 @@ export default function ScanScreen({ navigation, route }) {
   const [barcodeBuffer, setBarcodeBuffer] = useState([]);
   const [isLocked, setIsLocked] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const { transactionId, cartItems, setTransactionId, setCartItems, clearCart } = useContext(CartContext);
+  const { transactionId, cartItems, setTransactionId, setCartItems, clearCart, selectedDate } = useContext(CartContext);
 
   // New UI states merged in
   const [searchQuery, setSearchQuery] = useState("");
@@ -180,6 +180,12 @@ export default function ScanScreen({ navigation, route }) {
     });
   };
 
+  const handleRescan = () => {
+    setIsLocked(false);
+    isLockedRef.current = false;
+    setPrediction(null);
+  };
+
   // ─── Search states and logic ──────────────────────────────────────────────
   useEffect(() => {
     if (scanMode === "manual" && inventoryList.length === 0) {
@@ -211,7 +217,7 @@ export default function ScanScreen({ navigation, route }) {
     try {
       let activeId = transactionId;
       if (!activeId) {
-        const startRes = await api.post("/transactions/start");
+        const startRes = await api.post("/transactions/start", selectedDate ? { date: selectedDate } : {});
         activeId = startRes.data.transaction_id;
         setTransactionId(activeId);
       }
@@ -605,9 +611,19 @@ export default function ScanScreen({ navigation, route }) {
 
             <View style={styles.fallback}>
               {prediction && (
-                <AppText style={styles.wrong}>
-                  Not this product?
-                </AppText>
+                <>
+                  <AppText style={styles.wrong}>
+                    Not this product?
+                  </AppText>
+                  <TouchableOpacity
+                    style={{ marginBottom: 16, marginTop: 4 }}
+                    onPress={handleRescan}
+                  >
+                    <AppText font="semibold" style={{ color: "#E53935", fontSize: 16 }}>
+                      Tap to Rescan
+                    </AppText>
+                  </TouchableOpacity>
+                </>
               )}
               <TouchableOpacity
                 onPress={() => switchMode("barcode")}

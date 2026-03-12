@@ -17,6 +17,8 @@ sales_bp = Blueprint("sales", __name__)
 @sales_bp.route("/transactions/start", methods=["POST"])
 @token_required
 def start_transaction(user_id):
+    data = request.get_json(silent=True) or {}
+    date_param = data.get("date")
 
     conn = get_connection()
     cur = conn.cursor()
@@ -25,10 +27,16 @@ def start_transaction(user_id):
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         transaction_code = f"TXN{timestamp}"
 
-        cur.execute("""
-            INSERT INTO transactions (shop_id, transaction_code, total, status)
-            VALUES (%s, %s, 0, 'active')
-        """, (user_id, transaction_code))
+        if date_param:
+            cur.execute("""
+                INSERT INTO transactions (shop_id, transaction_code, total, status, created_at)
+                VALUES (%s, %s, 0, 'active', %s)
+            """, (user_id, transaction_code, f"{date_param} 12:00:00"))
+        else:
+            cur.execute("""
+                INSERT INTO transactions (shop_id, transaction_code, total, status)
+                VALUES (%s, %s, 0, 'active')
+            """, (user_id, transaction_code))
 
         transaction_id = cur.lastrowid
         conn.commit()
@@ -73,7 +81,7 @@ def add_item_to_transaction(user_id):
 
     try:
         cur.execute("""
-            SELECT id FROM transactions
+            SELECT id, created_at FROM transactions
             WHERE id = %s AND shop_id = %s AND status = 'active'
         """, (transaction_id, user_id))
 
@@ -81,6 +89,8 @@ def add_item_to_transaction(user_id):
 
         if not txn:
             return jsonify({"error": "Invalid or completed transaction"}), 400
+
+        txn_date = txn["created_at"]
 
         # ── Check if item already exists in this transaction ──
         if barcode:
@@ -117,9 +127,10 @@ def add_item_to_transaction(user_id):
                     price,
                     quantity,
                     total,
-                    transaction_id
+                    transaction_id,
+                    created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 user_id,
                 product_name,
@@ -128,7 +139,8 @@ def add_item_to_transaction(user_id):
                 price,
                 quantity,
                 total,
-                transaction_id
+                transaction_id,
+                txn_date
             ))
 
         # ── Update transaction total ──

@@ -35,7 +35,8 @@ export default function ConfirmProductScreen({ route, navigation }) {
     setTransactionId,
     cartItems,
     setCartItems,
-    clearCart
+    clearCart,
+    selectedDate
   } = useContext(CartContext);
 
   const isCartFlow = route.params?.isCartFlow || false;
@@ -129,7 +130,7 @@ export default function ConfirmProductScreen({ route, navigation }) {
       let activeId = transactionId;
 
       if (!activeId) {
-        const startRes = await api.post("/transactions/start");
+        const startRes = await api.post("/transactions/start", selectedDate ? { date: selectedDate } : {});
         activeId = startRes.data.transaction_id;
         setTransactionId(activeId);
       }

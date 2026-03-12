@@ -260,9 +260,11 @@ export default function DashboardScreen() {
                 onChange={(event, date) => {
                   setShowDatePicker(false);
                   if (date) {
-                    const formatted = date.toISOString().split("T")[0];
+                    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+                    const formatted = offsetDate.toISOString().split("T")[0];
                     // If it's today, we might want to keep it null to represent "Live"
-                    const isToday = formatted === new Date().toISOString().split("T")[0];
+                    const todayOffset = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000);
+                    const isToday = formatted === todayOffset.toISOString().split("T")[0];
                     setSelectedDate(isToday ? null : formatted);
                   }
                 }}
