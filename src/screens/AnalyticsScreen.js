@@ -22,6 +22,9 @@ const TEXT = "#111111";
 const MUTED = "#888888";
 const BORDER = "#EBEBEB";
 
+// ─── Category colour palette ───────────────────────────────────────────────────
+const CAT_COLORS = ["#3A6FF7", "#16A34A", "#D97706", "#9333EA", "#DC2626", "#0891B2", "#059669", "#C026D3"];
+
 // ─── Risk level config ────────────────────────────────────────────────────────
 const RISK_CFG = {
   high: { color: DANGER, label: "High Risk", dot: "#DC2626" },
@@ -244,29 +247,39 @@ export default function AnalyticsScreen() {
           </View>
         )}
 
-        {/* ── Demand forecast ────────────────────────────────────────────────── */}
-        {activeDemand.length > 0 && (
+        {/* ── Sales by Category ───────────────────────────────────────────── */}
+        {summary && (
           <View style={s.section}>
             <View style={s.sectionHead}>
-              <AppText font="bold" style={s.sectionTitle}>Demand Forecast</AppText>
-              <AppText style={s.sectionSub}>Next 7 days per product</AppText>
+              <AppText font="bold" style={s.sectionTitle}>Sales by Category</AppText>
+              <AppText style={s.sectionSub}>Revenue share</AppText>
             </View>
-            {activeDemand.map((prod, i) => (
-              <View
-                key={i}
-                style={[
-                  s.demandRow,
-                  i < activeDemand.length - 1 && { borderBottomWidth: 1, borderBottomColor: BORDER },
-                ]}
-              >
-                <AppText style={s.demandName} numberOfLines={1}>{prod.product_name}</AppText>
-                <View style={s.demandChip}>
-                  <AppText font="bold" style={s.demandChipText}>
-                    {Math.round(prod.total_predicted_7d)} units
-                  </AppText>
-                </View>
+            {summary.categories?.length > 0 ? (
+              summary.categories.map((cat, i) => {
+                const color = CAT_COLORS[i % CAT_COLORS.length];
+                const pct = Math.round(Number(cat.percentage) || 0);
+                return (
+                  <View key={i} style={s.catRow}>
+                    <View style={s.catLabelRow}>
+                      <View style={[s.catDot, { backgroundColor: color }]} />
+                      <AppText style={s.catName} numberOfLines={1}>
+                        {cat.category || "Uncategorised"}
+                      </AppText>
+                      <AppText font="bold" style={[s.catPct, { color }]}>{pct}%</AppText>
+                    </View>
+                    <View style={s.catBarBg}>
+                      <View style={[s.catBar, { width: `${pct}%`, backgroundColor: color }]} />
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={s.emptyState}>
+                <Ionicons name="pie-chart-outline" size={32} color={MUTED} />
+                <AppText style={s.emptyStateText}>No sales in this period</AppText>
+                <AppText style={s.emptyStateHint}>Try switching to Weekly or Monthly</AppText>
               </View>
-            ))}
+            )}
           </View>
         )}
 
@@ -397,27 +410,44 @@ const s = StyleSheet.create({
   riskMeta: { fontSize: 11, color: MUTED },
   riskLabel: { fontSize: 12, fontWeight: "700", marginLeft: 8 },
 
-  // ── Demand rows ──
-  demandRow: {
+  // ── Category rows ──
+  catRow: {
+    marginBottom: 14,
+  },
+  catLabelRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 11,
+    marginBottom: 6,
   },
-  demandName: { fontSize: 13, color: TEXT, flex: 1, marginRight: 10 },
-  demandChip: {
-    backgroundColor: "#EEF2FF",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  catDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
-  demandChipText: { fontSize: 12, color: ACCENT },
+  catName: { fontSize: 13, color: TEXT, flex: 1 },
+  catPct: { fontSize: 13 },
+  catBarBg: {
+    height: 6,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  catBar: {
+    height: 6,
+    borderRadius: 3,
+  },
 
   // ── Loading / error ──
   loadText: { fontSize: 13, color: MUTED, marginTop: 10 },
   errorText: { fontSize: 13, color: MUTED, textAlign: "center", paddingHorizontal: 32 },
   retryBtn: { marginTop: 4, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: TEXT, borderRadius: 20 },
   retryText: { color: WHITE, fontSize: 13, fontWeight: "600" },
+
+  // ── Empty state ──
+  emptyState: { alignItems: "center", paddingVertical: 20, gap: 6 },
+  emptyStateText: { fontSize: 13, color: MUTED, textAlign: "center", marginTop: 8 },
+  emptyStateHint: { fontSize: 11, color: MUTED, textAlign: "center" },
 
   // ── Top Selling Products ──
   topProductRow: {
