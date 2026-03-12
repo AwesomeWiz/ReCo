@@ -51,22 +51,42 @@ export default function SalesHistoryScreen({ navigation }) {
   // Grand total for the day
   const grandTotal = transactions.reduce((sum, t) => sum + Number(t.total || 0), 0);
 
-  // Download today's sales as PDF
+  // Download today's sales as PDF (Itemized)
   const downloadDailyReport = async () => {
     try {
+      const formatted = selectedDate.toLocaleDateString("en-CA");
+      // Fetch detailed items for this date
+      const res = await api.get(`/sales/today?date=${formatted}`);
+      const items = res.data || [];
+
+      // Aggregate items by description (product name)
+      const aggregated = items.reduce((acc, item) => {
+        const name = item.description;
+        if (!acc[name]) {
+          acc[name] = { qty: 0, amount: 0, rate: item.rate };
+        }
+        acc[name].qty += Number(item.qty);
+        acc[name].amount += Number(item.amount);
+        return acc;
+      }, {});
+
       const storeName = (await AsyncStorage.getItem("store_name")) || "My Store";
       const state = (await AsyncStorage.getItem("state")) || "";
 
-      const rows = transactions
-        .map(
-          (txn) =>
-            `<tr>
-              <td>${txn.transaction_code}</td>
-              <td style="text-align:right">${txn.formatted_time}</td>
-              <td style="text-align:right">₹${Number(txn.total).toFixed(2)}</td>
-            </tr>`
-        )
+      const rows = Object.keys(aggregated)
+        .sort()
+        .map((name) => {
+          const data = aggregated[name];
+          return `<tr>
+              <td>${name}</td>
+              <td style="text-align:right">${data.qty}</td>
+              <td style="text-align:right">₹${Number(data.rate).toFixed(2)}</td>
+              <td style="text-align:right">₹${Number(data.amount).toFixed(2)}</td>
+            </tr>`;
+        })
         .join("");
+
+      const totalValue = Object.values(aggregated).reduce((sum, item) => sum + item.amount, 0);
 
       const html = `
         <html>
@@ -79,14 +99,15 @@ export default function SalesHistoryScreen({ navigation }) {
             <hr/>
             <table width="100%" border="1" cellspacing="0" cellpadding="8" style="border-collapse:collapse">
               <tr style="background:#eee">
-                <th style="text-align:left">Transaction</th>
-                <th style="text-align:right">Time</th>
+                <th style="text-align:left">Product</th>
+                <th style="text-align:right">Qty</th>
+                <th style="text-align:right">Rate</th>
                 <th style="text-align:right">Amount</th>
               </tr>
               ${rows}
             </table>
             <p style="text-align:right; font-size:16px; font-weight:bold; margin-top:16px">
-              TOTAL: ₹${grandTotal.toFixed(2)}
+              TOTAL: ₹${totalValue.toFixed(2)}
             </p>
           </body>
         </html>

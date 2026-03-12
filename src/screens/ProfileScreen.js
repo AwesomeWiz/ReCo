@@ -116,8 +116,7 @@ export default function ProfileScreen({ navigation }) {
             "state",
             "district",
             "country",
-            "phone",
-            "upi_id"
+            "phone"
           ]);
           clearCart();
           navigation.reset({
