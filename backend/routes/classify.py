@@ -79,8 +79,6 @@ def _load_model():
             _class_names = json.load(f)
         print(f"[classify] Loaded {len(_class_names)} internal class slugs")
 
-_load_model()
-
 
 # ─── /classify endpoint ───────────────────────────────────────────────────────
 @classify_bp.route("/classify", methods=["POST"])
@@ -90,6 +88,10 @@ def classify_product(user_id):
     Body: { "image": "<base64>" }
     Returns inventory details if product is found in shop's stock.
     """
+    # Lazy-load model on first request (saves startup RAM on Railway free tier)
+    if _interpreter is None and _load_error == "Not loaded yet":
+        _load_model()
+
     if _interpreter is None:
         return jsonify({
             "error": "Model not loaded",
